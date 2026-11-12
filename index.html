@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>QRカメラ検証</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="QR検証">
+<meta name="theme-color" content="#14202b">
+<style>
+:root{--bg:#f4f6f8;--fg:#14202b;--sub:#5b6875;--line:#d5dbe1;--panel:#ffffff;--accent:#0b6bcb;--ok:#13804a;--warn:#b25e00;--ng:#c62828;}
+@media (prefers-color-scheme:dark){:root{--bg:#10171e;--fg:#e6ebf0;--sub:#93a1ae;--line:#2a3640;--panel:#17212a;--accent:#5aa9f0;--ok:#4cc38a;--warn:#f0a35a;--ng:#ef6b6b;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.6 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+ padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+h1{font-size:18px;margin:4px 0 2px}
+.ver{color:var(--sub);font-size:12px}
+.env{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px;margin:10px 0;padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+.env dt{color:var(--sub)}.env dd{margin:0;word-break:break-all}
+.view{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:3/4;max-height:56vh;width:100%}
+video{width:100%;height:100%;object-fit:cover;display:block}
+.frame{position:absolute;inset:18%;border:2px solid rgba(255,255,255,.8);border-radius:8px;pointer-events:none}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+button{font:inherit;font-size:15px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);min-height:44px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.result{padding:10px;background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--sub);border-radius:8px;min-height:3em;word-break:break-all}
+.result.hit{border-left-color:var(--ok)}
+.status{font-size:13px;color:var(--sub);margin:6px 0}
+.ok{color:var(--ok)}.warn{color:var(--warn)}.ng{color:var(--ng)}
+h2{font-size:15px;margin:18px 0 6px}
+ol{padding-left:1.4em;margin:0}ol li{margin:2px 0}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;font-size:12px;white-space:pre-wrap;word-break:break-all;max-height:40vh;overflow:auto;margin:0}
+</style>
+</head>
+<body>
+<h1>QRカメラ検証</h1>
+<div class="ver">第1.0版 / 2026-11-12 / zxing-wasm 3.1.6</div>
+
+<dl class="env">
+<dt>起動形態</dt><dd id="mode">-</dd>
+<dt>起動回数</dt><dd id="launch">-</dd>
+<dt>許可状態</dt><dd id="perm">-</dd>
+<dt>端末</dt><dd id="ua">-</dd>
+</dl>
+
+<div class="view"><video id="video" playsinline muted></video><div class="frame"></div></div>
+<div class="btns">
+<button id="start" class="primary">カメラ開始</button>
+<button id="stop">カメラ停止</button>
+<button id="clear">記録を消す</button>
+</div>
+<div class="status" id="status">「カメラ開始」を押してください。</div>
+<div class="result" id="result">読み取り結果がここに出ます。</div>
+
+<h2>検証手順</h2>
+<ol>
+<li>Safariのタブでこのページを開き、「カメラ開始」を押します。ダイアログが出たら許可します。</li>
+<li>「カメラ停止」→「カメラ開始」を押し、ダイアログが再度出るか確認します。</li>
+<li>ページを再読み込みし、もう一度「カメラ開始」を押します。</li>
+<li>Safariを完全に終了してから開き直し、同じ確認をします。</li>
+<li>アドレスバー左の「ぁあ」→「Webサイトの設定」→カメラを「許可」にし、2〜4を繰り返します。</li>
+<li>共有ボタン→「ホーム画面に追加」で追加し、アイコンから起動して2〜4を繰り返します。</li>
+</ol>
+<p class="status">ダイアログが出たかどうかは画面からは判定できないため、下の記録の「応答時間」は参考値です(長いほどダイアログで待った可能性が高い)。出た/出なかったは目で確認して控えてください。</p>
+
+<h2>記録(この端末のこのページだけに保存)</h2>
+<pre id="log"></pre>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
+<script>
+(function(){
+"use strict";
+var KEY="qr_camtest_log_v1";
+var $=function(id){return document.getElementById(id);};
+var video=$("video"),stream=null,timer=null,busy=false,hits=0;
+var canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{willReadFrequently:true});
+
+function now(){var d=new Date();return d.toLocaleString("ja-JP",{hour12:false});}
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]");}catch(e){return [];}}
+function save(a){try{localStorage.setItem(KEY,JSON.stringify(a.slice(-200)));}catch(e){}}
+function log(msg){var a=load();a.push(now()+"  "+msg);save(a);render();}
+function render(){$("log").textContent=load().slice().reverse().join("\n")||"(記録なし)";}
+
+var standalone=(window.matchMedia&&window.matchMedia("(display-mode: standalone)").matches)||window.navigator.standalone===true;
+var modeText=standalone?"ホーム画面アイコン(standalone)":"ブラウザのタブ";
+$("mode").textContent=modeText;
+$("ua").textContent=navigator.userAgent;
+var cnt=0;try{cnt=Number(localStorage.getItem(KEY+"_n")||0)+1;localStorage.setItem(KEY+"_n",String(cnt));}catch(e){}
+$("launch").textContent=cnt?cnt+"回目":"(保存不可)";
+log("ページ読込 起動形態="+modeText);
+
+function checkPerm(){
+  if(!navigator.permissions||!navigator.permissions.query){$("perm").textContent="取得不可(このブラウザは未対応)";return;}
+  navigator.permissions.query({name:"camera"}).then(function(p){
+    $("perm").textContent=p.state;
+    p.onchange=function(){$("perm").textContent=p.state;log("許可状態が変化 → "+p.state);};
+  }).catch(function(){$("perm").textContent="取得不可";});
+}
+checkPerm();
+
+function setStatus(t,cls){var s=$("status");s.textContent=t;s.className="status "+(cls||"");}
+
+function start(){
+  if(stream){setStatus("既にカメラ動作中です。");return;}
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus("このブラウザではカメラAPIが使えません(HTTPSで開いているか確認)。","ng");log("getUserMedia なし");return;}
+  var t0=performance.now();
+  setStatus("カメラ起動中…");
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false})
+  .then(function(s){
+    var ms=Math.round(performance.now()-t0);
+    stream=s;video.srcObject=s;video.play();
+    setStatus("カメラ動作中。QRを枠内に入れてください。(応答 "+ms+"ms)","ok");
+    log("カメラ開始 成功 応答時間="+ms+"ms 起動形態="+modeText);
+    checkPerm();
+    timer=setInterval(scan,150);
+  }).catch(function(e){
+    var ms=Math.round(performance.now()-t0);
+    setStatus("カメラ開始 失敗: "+e.name+" "+(e.message||""),"ng");
+    log("カメラ開始 失敗 "+e.name+" 応答時間="+ms+"ms");
+  });
+}
+function stop(){
+  if(timer){clearInterval(timer);timer=null;}
+  if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;video.srcObject=null;log("カメラ停止");}
+  setStatus("カメラ停止中。");
+}
+function scan(){
+  if(busy||!stream||video.readyState<2||!window.ZXingWASM)return;
+  var w=video.videoWidth,h=video.videoHeight;if(!w||!h)return;
+  canvas.width=w;canvas.height=h;ctx.drawImage(video,0,0,w,h);
+  var img=ctx.getImageData(0,0,w,h);busy=true;var t0=performance.now();
+  ZXingWASM.readBarcodes(img,{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1}).then(function(r){
+    busy=false;
+    if(r&&r.length&&r[0].isValid){
+      hits++;var ms=Math.round(performance.now()-t0);
+      var el=$("result");el.textContent=r[0].text;el.className="result hit";
+      setStatus("読取 "+hits+"件目 / 解析 "+ms+"ms / "+w+"x"+h,"ok");
+      if(navigator.vibrate)navigator.vibrate(60);
+      log("QR読取 解析="+ms+"ms 内容="+r[0].text.slice(0,80));
+      stop();
+    }
+  }).catch(function(e){busy=false;setStatus("解析エラー: "+e,"ng");});
+}
+$("start").addEventListener("click",start);
+$("stop").addEventListener("click",stop);
+$("clear").addEventListener("click",function(){try{localStorage.removeItem(KEY);}catch(e){}render();});
+document.addEventListener("visibilitychange",function(){log(document.hidden?"画面が非表示になった":"画面が表示に戻った");if(document.hidden)stop();});
+render();
+})();
+</script>
+</body>
+</html>

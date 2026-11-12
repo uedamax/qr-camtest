@@ -1,0 +1,9 @@
+{
+  "name": "QRカメラ検証",
+  "short_name": "QR検証",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f6f8",
+  "theme_color": "#14202b"
+}
