@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>QR検索</title>
+<meta name="theme-color" content="#14202b">
+<style>
+:root{--bg:#f4f6f8;--fg:#14202b;--sub:#5b6875;--line:#d5dbe1;--panel:#fff;--accent:#0b6bcb;--ok:#13804a;--ng:#c62828;}
+@media (prefers-color-scheme:dark){:root{--bg:#10171e;--fg:#e6ebf0;--sub:#93a1ae;--line:#2a3640;--panel:#17212a;--accent:#5aa9f0;--ok:#4cc38a;--ng:#ef6b6b;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+ padding:max(10px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+h1{font-size:18px;margin:0}
+.ver{color:var(--sub);font-size:11px}
+.who{font-size:13px;color:var(--sub);text-align:right}
+.view{position:relative;background:#000;border-radius:8px;overflow:hidden;aspect-ratio:1/1;max-height:50vh;width:100%;margin-top:10px}
+video{width:100%;height:100%;object-fit:cover;display:block}
+.frame{position:absolute;inset:18%;border:2px solid rgba(255,255,255,.85);border-radius:8px;pointer-events:none}
+.guide{margin:8px 0;font-size:15px}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+button{font:inherit;font-size:16px;padding:10px 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);min-height:48px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button.done{background:var(--ok);border-color:var(--ok);color:#fff}
+button:disabled{opacity:.5}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.status{font-size:13px;color:var(--sub);min-height:1.4em}
+.status.ng{color:var(--ng)}.status.ok{color:var(--ok)}
+.card{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:8px;padding:10px 12px;margin-top:8px}
+.card.complete{border-left-color:var(--ok)}
+.card dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
+.card dt{color:var(--sub);font-size:13px}.card dd{margin:0;word-break:break-all}
+.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:10px;border:1px solid var(--ok);color:var(--ok)}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>QR検索</h1><div class="ver">試作 第1.0版 / 2026-11-12</div></div>
+  <div class="who"><div id="who">未ログイン</div><button id="logout" hidden>ログアウト</button></div>
+</header>
+
+<div class="view"><video id="video" playsinline muted></video><div class="frame"></div></div>
+<div class="guide" id="guide">-</div>
+<div class="btns"><button id="scan" class="primary">読み取り開始</button></div>
+<div class="status" id="status"></div>
+<div id="result"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
+<script>
+(function(){
+"use strict";
+/* Apps Script の Webアプリ URL(デプロイ後に書き換え) */
+var API="https://script.google.com/macros/s/AKfycbyegIoGqW6QQdi3U4RpDKIk0b5EtnlWBiUMpWdm49dqfI1tMGsjLb-uPcuEbJ7EYInv7w/exec";
+var TOKEN_KEY="qr_lookup_token_v1";
+var $=function(id){return document.getElementById(id);};
+var video=$("video"),stream=null,timer=null,busy=false;
+var canvas=document.createElement("canvas"),ctx=canvas.getContext("2d",{willReadFrequently:true});
+var token=null,userName=null;
+try{token=localStorage.getItem(TOKEN_KEY);}catch(e){}
+
+function setStatus(t,cls){var s=$("status");s.textContent=t||"";s.className="status "+(cls||"");}
+function setGuide(){
+  $("guide").textContent=token?"品物のQRを枠に入れてください。":"最初に、自分の認証QRを読んでください。";
+  $("who").textContent=userName?userName+" さん":"未ログイン";
+  $("logout").hidden=!token;
+}
+function api(body){
+  body.token=token;
+  return fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
+    .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});
+}
+var ERR={unauthorized:"認証QRが無効です。管理者に確認してください。",not_found:"このQRの品物は登録されていません。",bad_request:"送信内容が不正です。",unknown_action:"不明な操作です。"};
+
+function login(t){
+  token=t;setStatus("認証を確認中…");
+  api({action:"whoami"}).then(function(r){
+    if(r.ok){userName=r.name;try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}setStatus("ログインしました。","ok");}
+    else{token=null;userName=null;setStatus(ERR[r.error]||r.error,"ng");}
+    setGuide();
+  }).catch(function(e){token=null;setStatus("通信エラー: "+e.message,"ng");setGuide();});
+}
+function logout(){token=null;userName=null;try{localStorage.removeItem(TOKEN_KEY);}catch(e){}$("result").innerHTML="";setStatus("ログアウトしました。");setGuide();}
+
+function showItem(item){
+  var done=item["確認完了"]==="TRUE";
+  var keys=["品名","保管場所","備考","完了日時","完了者","ID"];
+  var html='<div class="card'+(done?' complete':'')+'"><dl>';
+  keys.forEach(function(k){html+='<dt>'+k+'</dt><dd></dd>';});
+  html+='</dl><div class="btns"></div></div>';
+  $("result").innerHTML=html;
+  var dds=$("result").querySelectorAll("dd");
+  keys.forEach(function(k,i){dds[i].textContent=item[k]||"-";});
+  var b=document.createElement("button");
+  if(done){b.textContent="確認完了済み";b.disabled=true;b.className="done";}
+  else{b.textContent="確認完了にする";b.className="primary";b.onclick=function(){complete(item["ID"],b);};}
+  $("result").querySelector(".btns").appendChild(b);
+}
+function lookup(id){
+  setStatus("検索中…");
+  api({action:"lookup",id:id}).then(function(r){
+    if(r.ok){showItem(r.item);setStatus("");}
+    else{$("result").innerHTML="";setStatus(ERR[r.error]||r.error,"ng");if(r.error==="unauthorized")logout();}
+  }).catch(function(e){setStatus("通信エラー: "+e.message,"ng");});
+}
+function complete(id,b){
+  b.disabled=true;b.textContent="記録中…";
+  api({action:"complete",id:id}).then(function(r){
+    if(r.ok){showItem(r.item);setStatus("確認完了を記録しました。","ok");}
+    else{b.disabled=false;b.textContent="確認完了にする";setStatus(ERR[r.error]||r.error,"ng");}
+  }).catch(function(e){b.disabled=false;b.textContent="確認完了にする";setStatus("通信エラー: "+e.message,"ng");});
+}
+
+function onCode(text){
+  text=String(text).trim();
+  if(/^US-[0-9A-F]{32}$/.test(text)){login(text);return;}
+  if(/^IT-[0-9A-F]{32}$/.test(text)){
+    if(!token){setStatus("先に認証QRを読んでください。","ng");return;}
+    lookup(text);return;
+  }
+  setStatus("このアプリ用のQRではありません: "+text.slice(0,40),"ng");
+}
+
+/* カメラ: 枠内だけを最大800pxに縮小して解析(検証で読めた方式) */
+function start(){
+  if(stream)return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus("カメラが使えません。HTTPSで開いているか確認してください。","ng");return;}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1280},height:{ideal:720}},audio:false})
+  .then(function(s){stream=s;video.srcObject=s;video.play();$("scan").textContent="読み取り中…";$("scan").disabled=true;timer=setInterval(scan,150);})
+  .catch(function(e){setStatus("カメラを開始できません: "+e.name,"ng");});
+}
+function stop(){
+  if(timer){clearInterval(timer);timer=null;}
+  if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;video.srcObject=null;}
+  $("scan").textContent="次を読む";$("scan").disabled=false;
+}
+function scan(){
+  if(busy||!stream||video.readyState<2||!window.ZXingWASM)return;
+  var vw=video.videoWidth,vh=video.videoHeight;if(!vw||!vh)return;
+  var s=Math.round(Math.min(vw,vh)*0.64),sx=Math.round((vw-s)/2),sy=Math.round((vh-s)/2),d=Math.min(s,800);
+  canvas.width=d;canvas.height=d;ctx.drawImage(video,sx,sy,s,s,0,0,d,d);
+  busy=true;
+  ZXingWASM.readBarcodes(ctx.getImageData(0,0,d,d),{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1}).then(function(r){
+    busy=false;
+    if(r&&r.length&&r[0].isValid){if(navigator.vibrate)navigator.vibrate(60);stop();onCode(r[0].text);}
+  }).catch(function(e){busy=false;setStatus("解析エラー: "+(e&&e.message||e),"ng");});
+}
+$("scan").addEventListener("click",start);
+$("logout").addEventListener("click",logout);
+document.addEventListener("visibilitychange",function(){if(document.hidden)stop();});
+
+setGuide();
+if(token){api({action:"whoami"}).then(function(r){if(r.ok){userName=r.name;setGuide();}else logout();}).catch(function(){});}
+})();
+</script>
+</body>
+</html>
