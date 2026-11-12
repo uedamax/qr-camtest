@@ -37,12 +37,13 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 </head>
 <body>
 <h1>QRカメラ検証</h1>
-<div class="ver">第1.0版 / 2026-11-12 / zxing-wasm 3.1.6</div>
+<div class="ver">第1.1版 / 2026-11-12 / zxing-wasm 3.1.6 + jsQR 1.4.0(予備)</div>
 
 <dl class="env">
 <dt>起動形態</dt><dd id="mode">-</dd>
 <dt>起動回数</dt><dd id="launch">-</dd>
 <dt>許可状態</dt><dd id="perm">-</dd>
+<dt>解析エンジン</dt><dd id="engine">準備中…</dd>
 <dt>端末</dt><dd id="ua">-</dd>
 </dl>
 
@@ -70,6 +71,7 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 <pre id="log"></pre>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script>
 (function(){
 "use strict";
@@ -127,22 +129,67 @@ function stop(){
   if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;video.srcObject=null;log("カメラ停止");}
   setStatus("カメラ停止中。");
 }
+/* 解析エンジン: zxing-wasm を先に読み込み、失敗したら jsQR に切り替える */
+var engine="none",zxErrors=0;
+function errText(e){if(!e)return "(不明)";if(typeof e==="string")return e;return (e.name||"Error")+": "+(e.message||String(e));}
+function setEngine(name,detail){engine=name;$("engine").textContent=detail;}
+function useJsQR(reason){
+  if(window.jsQR){setEngine("jsqr","jsQR(予備)を使用 / zxing-wasm不可: "+reason);}
+  else{setEngine("none","使用不可 / zxing-wasm: "+reason+" / jsQRも読み込めず");}
+  log("zxing-wasm 使用不可: "+reason+" → "+(window.jsQR?"jsQRに切替":"jsQRもなし"));
+}
+function prepare(){
+  if(!window.ZXingWASM){useJsQR("ライブラリ読込失敗");return;}
+  var t0=performance.now();
+  var p=window.ZXingWASM.prepareZXingModule?window.ZXingWASM.prepareZXingModule({fireImmediately:true}):Promise.resolve();
+  Promise.resolve(p).then(function(){
+    /* 小さな白画像で実際に1回動かし、動作を確認する */
+    var c=document.createElement("canvas");c.width=c.height=32;var x=c.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,32,32);
+    return window.ZXingWASM.readBarcodes(x.getImageData(0,0,32,32),{formats:["QRCode"]});
+  }).then(function(){
+    var ms=Math.round(performance.now()-t0);
+    setEngine("zxing","zxing-wasm OK(準備 "+ms+"ms)");log("zxing-wasm 準備OK "+ms+"ms");
+  }).catch(function(e){useJsQR(errText(e));});
+}
+prepare();
+
+var ROI=0.64; /* 画面中央の枠(表示上の枠とほぼ同じ範囲)だけを解析する */
+var MAXW=800; /* 解析画像の最大幅。大きすぎる画像でのメモリ不足を避ける */
+function grab(){
+  var vw=video.videoWidth,vh=video.videoHeight;if(!vw||!vh)return null;
+  var s=Math.round(Math.min(vw,vh)*ROI),sx=Math.round((vw-s)/2),sy=Math.round((vh-s)/2);
+  var d=Math.min(s,MAXW);canvas.width=d;canvas.height=d;
+  ctx.drawImage(video,sx,sy,s,s,0,0,d,d);
+  return {img:ctx.getImageData(0,0,d,d),d:d,vw:vw,vh:vh};
+}
+function hit(text,ms,f,by){
+  hits++;
+  var el=$("result");el.textContent=text;el.className="result hit";
+  setStatus("読取 "+hits+"件目 / "+by+" / 解析 "+ms+"ms / 映像 "+f.vw+"x"+f.vh+" → 解析 "+f.d+"px","ok");
+  if(navigator.vibrate)navigator.vibrate(60);
+  log("QR読取 "+by+" 解析="+ms+"ms 内容="+text.slice(0,80));
+  stop();
+}
+function scanJsQR(f){
+  var t0=performance.now();
+  var r=window.jsQR(f.img.data,f.d,f.d,{inversionAttempts:"dontInvert"});
+  if(r&&r.data)hit(r.data,Math.round(performance.now()-t0),f,"jsQR");
+}
 function scan(){
-  if(busy||!stream||video.readyState<2||!window.ZXingWASM)return;
-  var w=video.videoWidth,h=video.videoHeight;if(!w||!h)return;
-  canvas.width=w;canvas.height=h;ctx.drawImage(video,0,0,w,h);
-  var img=ctx.getImageData(0,0,w,h);busy=true;var t0=performance.now();
-  ZXingWASM.readBarcodes(img,{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1}).then(function(r){
-    busy=false;
-    if(r&&r.length&&r[0].isValid){
-      hits++;var ms=Math.round(performance.now()-t0);
-      var el=$("result");el.textContent=r[0].text;el.className="result hit";
-      setStatus("読取 "+hits+"件目 / 解析 "+ms+"ms / "+w+"x"+h,"ok");
-      if(navigator.vibrate)navigator.vibrate(60);
-      log("QR読取 解析="+ms+"ms 内容="+r[0].text.slice(0,80));
-      stop();
-    }
-  }).catch(function(e){busy=false;setStatus("解析エラー: "+e,"ng");});
+  if(busy||!stream||video.readyState<2||engine==="none")return;
+  var f=grab();if(!f)return;
+  if(engine==="jsqr"){try{scanJsQR(f);}catch(e){setStatus("解析エラー(jsQR): "+errText(e),"ng");log("解析エラー jsQR "+errText(e));}return;}
+  busy=true;var t0=performance.now();
+  window.ZXingWASM.readBarcodes(f.img,{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1}).then(function(r){
+    busy=false;zxErrors=0;
+    if(r&&r.length&&r[0].isValid)hit(r[0].text,Math.round(performance.now()-t0),f,"zxing-wasm");
+  }).catch(function(e){
+    busy=false;zxErrors++;
+    var t=errText(e);
+    setStatus("解析エラー(zxing-wasm "+zxErrors+"回目): "+t,"ng");
+    log("解析エラー zxing-wasm "+t+" 画像="+f.d+"px");
+    if(zxErrors>=3)useJsQR("連続エラー: "+t);
+  });
 }
 $("start").addEventListener("click",start);
 $("stop").addEventListener("click",stop);
