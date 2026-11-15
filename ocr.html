@@ -26,7 +26,7 @@ video{display:block;width:100%;height:100%;object-fit:cover}
 .hudmsg img{height:34px;background:#fff;border-radius:3px}
 .hudmsg span{flex:1;min-width:0}
 #ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
-.btns{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0;justify-content:flex-end}
 button{font:inherit;font-size:16px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);min-height:46px}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 .status{font-size:13px;color:var(--sub);min-height:1.4em}
@@ -47,7 +47,7 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 </head>
 <body>
 <h1>カートンラベル読取試験</h1>
-<div class="ver">第1.2版 / 2026-11-15 / zxing-wasm 3.1.6 + tesseract.js 5.1.1(数字のみ)</div>
+<div class="ver">第1.3版 / 2026-11-15 / zxing-wasm 3.1.6 + tesseract.js 5.1.1(数字のみ)</div>
 
 <div class="stage" id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas>
  <div class="hud">
@@ -58,9 +58,9 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
  <div class="hudmsg"><img id="numMini" alt=""><img id="ordMini" alt=""><span id="hudMsg">「開始」を押してください。</span></div>
 </div>
 <div class="btns">
- <button id="start" class="primary">開始</button>
- <button id="reset">次のラベル(リセット)</button>
  <button id="stop">停止</button>
+ <button id="reset">次のラベル(リセット)</button>
+ <button id="start" class="primary">開始</button>
 </div>
 <div class="status" id="status">「開始」を押し、ラベルを白い枠に合わせてください(緑の四角にQRが入るように)。</div>
 

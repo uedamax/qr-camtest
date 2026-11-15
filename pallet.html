@@ -13,6 +13,7 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 -apple-system,
  padding:max(6px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
 .top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .top h1{font-size:15px;margin:0;flex:1;min-width:0}
+.top #logout{order:-1}
 .ver{color:var(--sub);font-size:10px}
 .who{font-size:12px;color:var(--sub)}
 .serial{display:flex;align-items:center;gap:6px;margin-top:4px}
@@ -34,7 +35,8 @@ video{display:block;width:100%;height:100%;object-fit:cover}
 .hudmsg{position:absolute;left:5px;right:5px;bottom:5px;background:rgba(0,0,0,.62);color:#fff;border-radius:8px;padding:3px 8px;font-size:12px;display:flex;gap:6px;align-items:center;pointer-events:none}
 .hudmsg img{height:30px;background:#fff;border-radius:3px}
 .hudmsg span{flex:1;min-width:0}
-.btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;justify-content:flex-end}
+.btns .lnk{margin-right:auto}
 button{font:inherit;font-size:15px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);min-height:44px}
 button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
 button:disabled{opacity:.45}
@@ -44,7 +46,7 @@ button:disabled{opacity:.45}
 .ordrow select{flex:1;min-width:0;font-size:16px}
 .ordbig{font-size:22px;font-weight:bold}
 .meta{font-size:13px;color:var(--sub)}
-.range{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.range{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;justify-content:flex-end}
 .range input{width:4.2em;font-size:26px;font-weight:bold;text-align:center;padding:2px}
 .range .cnt{font-size:18px;font-weight:bold}
 .checks{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}
@@ -60,14 +62,14 @@ textarea{width:100%;min-height:48px;font-size:14px}
 details{margin-top:8px}
 pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px;font-size:11px;white-space:pre-wrap;max-height:30vh;overflow:auto;margin:0}
 .hidden{display:none!important}
-.confirm{display:flex;gap:8px;align-items:center;margin-top:8px;padding:8px;border-radius:6px;background:var(--bg);font-weight:bold}
+.confirm{display:flex;flex-direction:row-reverse;justify-content:space-between;gap:8px;align-items:center;margin-top:8px;padding:8px;border-radius:6px;background:var(--bg);font-weight:bold}
 .confirm input{width:26px;height:26px}
 .lnk{align-self:center;color:var(--accent)}
 </style>
 </head>
 <body>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.0版 / 2026-11-15 / QR状態表示・棚卸確認つき</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.1版 / 2026-11-15 / ボタン右寄せ</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="logout" class="hidden">ログアウト</button>
 </div>
@@ -82,9 +84,9 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
  <div class="hudmsg"><img id="numMini" alt=""><img id="ordMini" alt=""><span id="hudMsg">「開始」を押してください。</span></div>
 </div>
 <div class="btns">
- <button id="start" class="primary">開始</button>
- <button id="rescan">読み直し</button>
  <button id="stop">停止</button>
+ <button id="rescan">読み直し</button>
+ <button id="start" class="primary">開始</button>
 </div>
 <div class="status" id="status"></div>
 
@@ -104,7 +106,7 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
  <ul class="checks" id="checks"></ul>
  <details><summary>差異メモ(違いがあれば)</summary><textarea id="note" placeholder="例: 12番の箱が見当たらない / ラベル汚れ"></textarea></details>
  <label class="confirm"><input type="checkbox" id="confirmed"> 実物のカートンを数え、上の範囲どおりと確認した(棚卸確認☑)</label>
- <div class="btns"><button id="save" class="primary" disabled>記録する(未確認・差異あり)</button><a class="lnk" href="list.html" target="_blank">確認一覧</a><button id="next">次のパレット</button></div>
+ <div class="btns"><a class="lnk" href="list.html" target="_blank">確認一覧</a><button id="next">次のパレット</button><button id="save" class="primary" disabled>記録する(未確認・差異あり)</button></div>
  <div class="status" id="saveStatus"></div>
  <ul class="recs" id="myRecs"></ul>
 </div>
