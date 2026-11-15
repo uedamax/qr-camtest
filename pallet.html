@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>パレット確認試作</title>
+<meta name="theme-color" content="#14202b">
+<style>
+:root{--bg:#f4f6f8;--fg:#14202b;--sub:#5b6875;--line:#d5dbe1;--panel:#fff;--accent:#0b6bcb;--ok:#13804a;--ng:#c62828;--warn:#b26a00;--okbg:#e6f4ec;--ngbg:#fdecec;--warnbg:#fff4e0}
+@media (prefers-color-scheme:dark){:root{--bg:#10171e;--fg:#e6ebf0;--sub:#93a1ae;--line:#2a3640;--panel:#17212a;--accent:#5aa9f0;--ok:#4cc38a;--ng:#ef6b6b;--warn:#f0b04c;--okbg:#14301f;--ngbg:#3a1717;--warnbg:#3a2c12;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.45 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+ padding:max(6px,env(safe-area-inset-top)) max(10px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(10px,env(safe-area-inset-left))}
+.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top h1{font-size:15px;margin:0;flex:1;min-width:0}
+.ver{color:var(--sub);font-size:10px}
+.who{font-size:12px;color:var(--sub)}
+.serial{display:flex;align-items:center;gap:6px;margin-top:4px}
+.serial label{font-weight:bold}
+.serial input{width:6.5em;font-size:22px;font-weight:bold;padding:4px 8px}
+input,select,textarea{font:inherit;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);padding:6px}
+.stage{position:relative;width:100%;height:min(44vh,430px);background:#000;border-radius:8px;overflow:hidden;margin-top:6px;border:4px solid #555;transition:border-color .2s}
+.stage.qrok{border-color:#2e7d32}
+.stage.qrng{border-color:#555}
+video{display:block;width:100%;height:100%;object-fit:cover}
+#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.hud{position:absolute;left:0;right:0;top:0;display:flex;gap:5px;padding:5px;pointer-events:none}
+.chip{flex:1;min-width:0;background:rgba(0,0,0,.62);color:#fff;border-radius:8px;padding:3px 7px;border-left:5px solid #999}
+.chip.qr{border-left-color:#9e9e9e}.chip.num{border-left-color:#ef5350}.chip.ord{border-left-color:#42a5f5}
+.chip .lb{font-size:10px;opacity:.85;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip .v{font-size:24px;font-weight:bold;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip.fixed{background:rgba(19,128,74,.88)}
+.chip.qr.fixed{border-left-color:#a5d6a7}
+.hudmsg{position:absolute;left:5px;right:5px;bottom:5px;background:rgba(0,0,0,.62);color:#fff;border-radius:8px;padding:3px 8px;font-size:12px;display:flex;gap:6px;align-items:center;pointer-events:none}
+.hudmsg img{height:30px;background:#fff;border-radius:3px}
+.hudmsg span{flex:1;min-width:0}
+.btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+button{font:inherit;font-size:15px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);min-height:44px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+button:disabled{opacity:.45}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;margin-top:6px}
+.panel h2{font-size:13px;margin:0 0 4px;color:var(--sub);font-weight:normal}
+.ordrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.ordrow select{flex:1;min-width:0;font-size:16px}
+.ordbig{font-size:22px;font-weight:bold}
+.meta{font-size:13px;color:var(--sub)}
+.range{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px}
+.range input{width:4.2em;font-size:26px;font-weight:bold;text-align:center;padding:2px}
+.range .cnt{font-size:18px;font-weight:bold}
+.checks{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:4px}
+.checks li{border-radius:6px;padding:4px 8px;font-size:14px;border-left:5px solid var(--line);background:var(--bg)}
+.checks li.ok{background:var(--okbg);border-left-color:var(--ok)}
+.checks li.ng{background:var(--ngbg);border-left-color:var(--ng)}
+.checks li.warn{background:var(--warnbg);border-left-color:var(--warn)}
+.status{font-size:13px;color:var(--sub);min-height:1.4em}
+.status.ng{color:var(--ng)}.status.ok{color:var(--ok)}
+textarea{width:100%;min-height:48px;font-size:14px}
+.recs{font-size:13px;margin:4px 0 0;padding-left:1.2em}
+.qrline{font-size:12px;color:var(--sub);word-break:break-all;margin-top:4px}
+details{margin-top:8px}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px;font-size:11px;white-space:pre-wrap;max-height:30vh;overflow:auto;margin:0}
+.hidden{display:none!important}
+.confirm{display:flex;gap:8px;align-items:center;margin-top:8px;padding:8px;border-radius:6px;background:var(--bg);font-weight:bold}
+.confirm input{width:26px;height:26px}
+.lnk{align-self:center;color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="top">
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.0版 / 2026-11-15 / QR状態表示・棚卸確認つき</div></h1>
+ <div class="who" id="who">未ログイン</div>
+ <button id="logout" class="hidden">ログアウト</button>
+</div>
+<div class="serial"><label for="serial">通番</label><input id="serial" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="1〜300"><span class="meta" id="serialInfo"></span></div>
+
+<div class="stage qrng" id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas>
+ <div class="hud">
+  <div class="chip qr" id="qrChip"><div class="lb">QR</div><div class="v" id="qrHud">未検出</div></div>
+  <div class="chip num" id="numChip"><div class="lb">カートン番号</div><div class="v" id="numHud">-</div></div>
+  <div class="chip ord" id="ordChip"><div class="lb">オーダー下4桁</div><div class="v" id="ordHud">-</div></div>
+ </div>
+ <div class="hudmsg"><img id="numMini" alt=""><img id="ordMini" alt=""><span id="hudMsg">「開始」を押してください。</span></div>
+</div>
+<div class="btns">
+ <button id="start" class="primary">開始</button>
+ <button id="rescan">読み直し</button>
+ <button id="stop">停止</button>
+</div>
+<div class="status" id="status"></div>
+
+<div class="panel" id="ordPanel">
+ <h2>オーダー(QRの品番で絞込み → 下4桁で自動選択。違えば選び直してください)</h2>
+ <div class="ordrow"><select id="ordSel"><option value="">(QRを読むと候補が出ます)</option></select>
+  <input id="ordManual" inputmode="numeric" maxlength="4" placeholder="下4桁" style="width:5em"></div>
+ <div class="meta" id="ordMeta"></div>
+ <div class="meta" id="sumiInfo"></div>
+ <ul class="recs" id="otherRecs"></ul>
+</div>
+
+<div class="panel">
+ <h2>このパレットに載っているカートン番号(連番の前提)</h2>
+ <div class="range"><input id="from" inputmode="numeric" maxlength="2" placeholder="から"> 〜 <input id="to" inputmode="numeric" maxlength="2" placeholder="まで"> <span class="cnt" id="cnt"></span>
+  <button id="useSumi" class="hidden">住友の範囲を入れる</button></div>
+ <ul class="checks" id="checks"></ul>
+ <details><summary>差異メモ(違いがあれば)</summary><textarea id="note" placeholder="例: 12番の箱が見当たらない / ラベル汚れ"></textarea></details>
+ <label class="confirm"><input type="checkbox" id="confirmed"> 実物のカートンを数え、上の範囲どおりと確認した(棚卸確認☑)</label>
+ <div class="btns"><button id="save" class="primary" disabled>記録する(未確認・差異あり)</button><a class="lnk" href="list.html" target="_blank">確認一覧</a><button id="next">次のパレット</button></div>
+ <div class="status" id="saveStatus"></div>
+ <ul class="recs" id="myRecs"></ul>
+</div>
+<div class="qrline" id="qrLine"></div>
+
+<details><summary>記録(動作ログ)</summary><pre id="log"></pre></details>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+(function(){
+"use strict";
+var API="https://script.google.com/macros/s/AKfycbyegIoGqW6QQdi3U4RpDKIk0b5EtnlWBiUMpWdm49dqfI1tMGsjLb-uPcuEbJ7EYInv7w/exec";
+var TOKEN_KEY="qr_lookup_token_v1";
+var $=function(id){return document.getElementById(id);};
+var video=$("video"),ov=$("ov"),octx=ov.getContext("2d");
+var full=document.createElement("canvas"),fctx=full.getContext("2d",{willReadFrequently:true});
+var small=document.createElement("canvas"),sctx=small.getContext("2d",{willReadFrequently:true});
+var stream=null,timer=null,busy=false,worker=null,workerReady=false,lastQuad=null,lastSeen=0;
+var token=null,userName="",ORDERS=null;
+
+/* ラベル上の位置(QRの一辺=1、QR左上が原点) */
+var LABEL={u0:-6.2,v0:-0.6,u1:1.5,v1:4.4};
+var BOX={num:{u0:-0.1,v0:2.4,u1:1.45,v1:3.6},ord:{u0:-0.9,v0:3.3,u1:0.5,v1:4.15}};
+var NEED=3,PX=110;
+
+var st; /* 読み取りの状態 */
+var cur={order:null,info:null}; /* 選んだオーダーと、通番の情報 */
+function resetScan(){st={qr:null,pq:null,votes:{num:{},ord:{}},fixed:{num:null,ord:null},qrAt:0};renderScan();}
+
+function log(m){var p=$("log");var t=new Date().toLocaleTimeString("ja-JP",{hour12:false});p.textContent=t+" "+m+"\n"+p.textContent.slice(0,4000);}
+function setStatus(t,c){var s=$("status");s.textContent=t;s.className="status "+(c||"");$("hudMsg").textContent=t;}
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+function api(body){
+  body.token=token;
+  return fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
+  .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});
+}
+
+/* ---------- ログイン ---------- */
+function setLogin(name){
+  userName=name||"";$("who").textContent=name?("担当: "+name):"未ログイン(本人用の認証QRを読んでください)";
+  $("logout").classList.toggle("hidden",!name);
+}
+function tryToken(t){
+  token=t;setStatus("認証を確認中…");
+  return api({action:"whoami"}).then(function(j){
+    if(!j.ok){token=null;try{localStorage.removeItem(TOKEN_KEY);}catch(e){}setLogin("");setStatus("認証QRが無効です。","ng");return false;}
+    try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}
+    setLogin(j.name);log("ログイン "+j.name);loadOrders();return true;
+  }).catch(function(e){setStatus("通信エラー: "+e.message,"ng");return false;});
+}
+function loadOrders(){
+  setStatus("オーダー一覧を読込中…");
+  return api({action:"candidates",pn:""}).then(function(j){
+    if(!j.ok)throw new Error(j.error);ORDERS=j.orders;log("オーダー "+ORDERS.length+"件");
+    setStatus("準備OK。通番を入れて、カートンラベルを枠に合わせてください。","ok");
+    if(st.pq)fillOrders();
+  }).catch(function(e){setStatus("オーダー一覧の読込に失敗: "+e.message,"ng");});
+}
+$("logout").addEventListener("click",function(){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;ORDERS=null;setLogin("");});
+
+/* ---------- QRの分解 ---------- */
+function parseQR(t){
+  t=String(t).trim().replace(/'+$/,"");
+  var f=t.split(",");if(f.length<6)return null;
+  var tail=f.slice(5).join(",");var lots=[],m,re=/(\d{6}-\d{4}):(\d+?)(?=\d{6}-\d{4}:|TOTAL:)/g;
+  while((m=re.exec(tail)))lots.push(m[1]+"="+m[2]);
+  var tot=(tail.match(/TOTAL:(\d+)/)||[])[1];
+  return {id:f[0],dt:f[1],x3:f[2],pn:f[3],name:f[4],lots:lots,total:tot};
+}
+
+/* ---------- オーダーの候補 ---------- */
+function fillOrders(){
+  var sel=$("ordSel");if(!ORDERS)return;
+  var pn=st.pq?st.pq.pn:"";var l4=st.fixed.ord||$("ordManual").value.replace(/\D/g,"");
+  var list=ORDERS.filter(function(o){return !pn||o.pn===pn;});
+  if(l4.length===4&&!pn)list=ORDERS.filter(function(o){return o.last4===l4;});
+  list.sort(function(a,b){var am=a.last4===l4?0:1,bm=b.last4===l4?0:1;return am-bm||(a.date<b.date?-1:a.date>b.date?1:0);});
+  var keep=cur.order&&list.some(function(o){return o.order===cur.order.order;})?cur.order.order:"";
+  var hit=l4.length===4?list.filter(function(o){return o.last4===l4;})[0]:null;
+  sel.innerHTML='<option value="">候補 '+list.length+'件'+(pn?'(品番 '+esc(pn)+')':'')+' から選択</option>'+list.map(function(o){
+    return '<option value="'+esc(o.order)+'">'+esc(o.order)+'  '+esc(o.item)+'  '+o.cartons+'箱  '+esc(o.date)+(o.last4===l4?'  ←下4桁一致':'')+'</option>';}).join("");
+  var pick=hit?hit.order:keep;
+  if(pick){sel.value=pick;selectOrder(pick);}
+}
+function selectOrder(code){
+  var o=ORDERS&&ORDERS.filter(function(x){return x.order===code;})[0];
+  cur.order=o||null;cur.info=null;
+  $("ordMeta").innerHTML=o?('<span class="ordbig">'+esc(o.order)+'</span>  品番 '+esc(o.pn)+' / '+esc(o.item)+' / <b>カートン '+o.cartons+'箱</b>(1〜'+o.cartons+') / 搬入 '+esc(o.date)):"";
+  $("sumiInfo").textContent="";$("otherRecs").innerHTML="";
+  if(o)loadInfo();
+  check();
+}
+$("ordSel").addEventListener("change",function(){selectOrder(this.value);});
+$("ordManual").addEventListener("input",function(){if(this.value.replace(/\D/g,"").length===4)fillOrders();});
+
+function serial(){return $("serial").value.replace(/\D/g,"");}
+var infoSeq=0;
+function loadInfo(){
+  var s=serial();if(!s||!cur.order||!token){check();return;}
+  var my=++infoSeq;$("sumiInfo").textContent="通番 "+s+" の情報を確認中…";
+  api({action:"palletInfo",serial:s,order:cur.order.order}).then(function(j){
+    if(my!==infoSeq)return;if(!j.ok)throw new Error(j.error);cur.info=j;showInfo();check();
+  }).catch(function(e){$("sumiInfo").textContent="情報の取得に失敗: "+e.message;});
+}
+function sumiFor(){if(!cur.info||!cur.order)return null;return cur.info.sumi.filter(function(x){return x.order===cur.order.order;})[0]||null;}
+function showInfo(){
+  var i=cur.info;if(!i)return;
+  var s=sumiFor();
+  if(s&&s.from&&s.to){$("sumiInfo").innerHTML='住友リスト: 通番 '+esc(i.serial)+' は <b>'+esc(s.order)+' の '+s.from+'〜'+s.to+'</b>'+(s.note?' / '+esc(s.note):'');$("useSumi").classList.remove("hidden");}
+  else if(i.sumi.length){$("sumiInfo").innerHTML='住友リスト: 通番 '+esc(i.serial)+' は <b>'+esc(i.sumi.map(function(x){return x.order+(x.from?" "+x.from+"〜"+x.to:"");}).join(", "))+'</b>(選んだオーダーと違います)';$("useSumi").classList.add("hidden");}
+  else{$("sumiInfo").textContent="住友リスト: この通番の情報はまだありません";$("useSumi").classList.add("hidden");}
+  $("otherRecs").innerHTML=i.orderRecords.length?i.orderRecords.map(function(r){return '<li>同じオーダーの記録: 通番 '+esc(r.serial)+' に '+r.from+'〜'+r.to+'('+esc(r.by)+')</li>';}).join(""):"";
+  $("myRecs").innerHTML=i.records.length?i.records.map(function(r){return '<li>この通番の記録: '+(r.confirmed?'☑ ':'□ ')+esc(r.at)+' '+esc(r.order)+' '+r.from+'〜'+r.to+' 範囲内 '+esc(r.inRange)+' / '+esc(r.sumiMatch)+'('+esc(r.by)+')</li>';}).join(""):"";
+}
+$("useSumi").addEventListener("click",function(){var s=sumiFor();if(s){$("from").value=s.from;$("to").value=s.to;check();}});
+$("serial").addEventListener("change",function(){$("serialInfo").textContent="";loadInfo();});
+
+/* ---------- 範囲の判定 ---------- */
+function check(){
+  var ul=$("checks"),items=[];var f=+$("from").value,t=+$("to").value;var o=cur.order;
+  var valid=f>=1&&t<=99&&f<=t&&$("from").value!==""&&$("to").value!=="";
+  $("cnt").textContent=valid?("= "+(t-f+1)+" 箱"):"";
+  if(!serial())items.push(["ng","通番が入っていません"]);
+  if(!o)items.push(["ng","オーダーが選ばれていません"]);
+  if(!valid&&($("from").value||$("to").value))items.push(["ng","範囲が正しくありません(1〜99、から ≦ まで)"]);
+  if(valid&&o){
+    if(t>o.cartons)items.push(["ng","「まで」("+t+")が、このオーダーのカートン数("+o.cartons+")を超えています"]);
+    var n=st.fixed.num?+st.fixed.num:null;
+    if(n===null)items.push(["warn","読み取ったカートン番号がありません(未読取のまま記録できます)"]);
+    else items.push(n>=f&&n<=t?["ok","読み取ったカートン番号 "+n+" は範囲内です"]:["ng","読み取ったカートン番号 "+n+" が範囲外です"]);
+    var s=sumiFor();
+    if(s&&s.from&&s.to)items.push(s.from===f&&s.to===t?["ok","住友リストと一致("+s.from+"〜"+s.to+")"]:["ng","住友リストと違います(住友 "+s.from+"〜"+s.to+")"]);
+    else if(cur.info&&cur.info.sumi.length)items.push(["warn","住友リストでは、この通番は別のオーダーです"]);
+    else if(cur.info)items.push(["warn","住友リストの情報なし"]);
+    if(cur.info){cur.info.orderRecords.forEach(function(r){if(!(t<r.from||f>r.to))items.push(["ng","通番 "+r.serial+" の記録("+r.from+"〜"+r.to+")と重なっています"]);});
+      var covered=cur.info.orderRecords.reduce(function(a,r){return a+(r.to-r.from+1);},0);
+      items.push(["", "このオーダーの記録済み: ほかの通番 "+covered+"箱 + この通番 "+(t-f+1)+"箱 / 全 "+o.cartons+"箱"]);}
+  }
+  if(st.fixed.ord&&st.pq&&cands().indexOf(st.fixed.ord)<0)items.push(["ng","読み取った下4桁 "+st.fixed.ord+" は、品番 "+st.pq.pn+" の在庫オーダーにありません(読み違いか、在庫明細にないオーダー)"]);
+  else if(st.fixed.ord&&o&&o.last4!==st.fixed.ord)items.push(["warn","選んだオーダーの下4桁("+o.last4+")が、読み取った下4桁("+st.fixed.ord+")と違います"]);
+  if(st.pq&&o&&st.pq.pn!==o.pn)items.push(["ng","QRの品番("+st.pq.pn+")と、選んだオーダーの品番("+o.pn+")が違います"]);
+  ul.innerHTML=items.map(function(x){return '<li class="'+x[0]+'">'+esc(x[1])+'</li>';}).join("");
+  $("save").disabled=!(valid&&o&&serial()&&token&&!(t>o.cartons));
+}
+["from","to"].forEach(function(id){$(id).addEventListener("input",check);});
+$("confirmed").addEventListener("change",function(){$("save").textContent=this.checked?"棚卸確認済みとして記録":"記録する(未確認・差異あり)";});
+
+$("save").addEventListener("click",function(){
+  var b=$("save");b.disabled=true;$("saveStatus").textContent="記録中…";$("saveStatus").className="status";
+  api({action:"saveRange",serial:serial(),order:cur.order.order,from:+$("from").value,to:+$("to").value,scanned:st.fixed.num||"",confirmed:$("confirmed").checked,qrId:st.pq?st.pq.id:"",note:$("note").value})
+  .then(function(j){
+    if(!j.ok)throw new Error(j.error);
+    $("saveStatus").textContent="記録しました("+(j.confirmed?"棚卸確認☑":"未確認")+" / 範囲内 "+j.inRange+" / "+j.sumiMatch+")";$("saveStatus").className="status ok";
+    cur.info=j.info;showInfo();check();log("記録 "+serial()+" "+cur.order.order+" "+$("from").value+"-"+$("to").value);
+  }).catch(function(e){$("saveStatus").textContent="記録に失敗: "+e.message;$("saveStatus").className="status ng";check();});
+});
+$("next").addEventListener("click",function(){
+  var s=+serial();if(s)$("serial").value=s+1;$("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;$("save").textContent="記録する(未確認・差異あり)";
+  cur={order:null,info:null};$("ordMeta").textContent="";$("sumiInfo").textContent="";$("otherRecs").innerHTML="";$("myRecs").innerHTML="";$("saveStatus").textContent="";
+  $("ordSel").innerHTML='<option value="">(QRを読むと候補が出ます)</option>';$("ordManual").value="";$("useSumi").classList.add("hidden");
+  resetScan();clearMini();check();setStatus("次のパレットです。カートンラベルを枠に合わせてください。");
+});
+
+/* ---------- 読み取り表示 ---------- */
+function top(v){return Object.keys(v).map(function(k){return [k,v[k]];}).sort(function(a,b){return b[1]-a[1];});}
+function renderScan(){
+  var seen=st.qr&&(Date.now()-lastSeen<1500);
+  $("stage").className="stage "+(seen?"qrok":"qrng");
+  $("qrHud").textContent=st.pq?st.pq.pn:(st.qr?"書式外":"未検出");
+  $("qrChip").className="chip qr"+(st.qr?" fixed":"");
+  $("qrChip").querySelector(".lb").textContent=st.qr?(seen?"QR 読取中":"QR 読取済"):"QR";
+  ["num","ord"].forEach(function(k){var t=top(st.votes[k]);var v=st.fixed[k]?st.fixed[k]:(t.length?t[0][0]+"?":"-");
+    $(k+"Hud").textContent=v;$(k+"Chip").className="chip "+k+(st.fixed[k]?" fixed":"");});
+}
+function clearMini(){["numMini","ordMini"].forEach(function(i){$(i).removeAttribute("src");});$("qrLine").textContent="";}
+
+/* ---------- 画像処理と文字認識(ocr.html 第1.1版と同じ) ---------- */
+function crop(q,b){
+  var ax=q[1].x-q[0].x,ay=q[1].y-q[0].y,bx=q[3].x-q[0].x,by=q[3].y-q[0].y;
+  var w=Math.round((b.u1-b.u0)*PX),h=Math.round((b.v1-b.v0)*PX);
+  var c=document.createElement("canvas");c.width=w;c.height=h;var x=c.getContext("2d",{willReadFrequently:true});
+  x.fillStyle="#fff";x.fillRect(0,0,w,h);
+  var m11=ax/PX,m21=ay/PX,m12=bx/PX,m22=by/PX;
+  var tx=q[0].x+b.u0*ax+b.v0*bx,ty=q[0].y+b.u0*ay+b.v0*by;
+  var det=m11*m22-m12*m21;if(Math.abs(det)<1e-9)return null;
+  var i11=m22/det,i12=-m12/det,i21=-m21/det,i22=m11/det;
+  x.setTransform(i11,i21,i12,i22,-(i11*tx+i12*ty),-(i21*tx+i22*ty));
+  x.imageSmoothingQuality="high";x.drawImage(full,0,0);x.setTransform(1,0,0,1,0,0);
+  var d=x.getImageData(0,0,w,h),p=d.data;
+  for(var i=0;i<p.length;i+=4){var g=(p[i]*0.299+p[i+1]*0.587+p[i+2]*0.114)|0;p[i]=p[i+1]=p[i+2]=g;}
+  x.putImageData(d,0,0);return c;
+}
+function otsu(c){
+  var x=c.getContext("2d",{willReadFrequently:true}),d=x.getImageData(0,0,c.width,c.height),p=d.data,h=new Array(256).fill(0),n=p.length/4;
+  for(var i=0;i<p.length;i+=4)h[p[i]]++;
+  var sum=0;for(i=0;i<256;i++)sum+=i*h[i];
+  var sB=0,wB=0,best=0,th=128;
+  for(i=0;i<256;i++){wB+=h[i];if(!wB)continue;var wF=n-wB;if(!wF)break;sB+=i*h[i];var mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;th=i;}}
+  var o=document.createElement("canvas");o.width=c.width;o.height=c.height;var ox=o.getContext("2d");var od=ox.createImageData(c.width,c.height);
+  for(i=0;i<p.length;i+=4){var v2=p[i]>th?255:0;od.data[i]=od.data[i+1]=od.data[i+2]=v2;od.data[i+3]=255;}
+  ox.putImageData(od,0,0);return o;
+}
+function pad(c){var o=document.createElement("canvas");o.width=c.width+40;o.height=c.height+40;var x=o.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,o.width,o.height);x.drawImage(c,20,20);return o;}
+/* 下4桁の候補: QRの品番で絞ったオーダーの下4桁 */
+function cands(){if(!ORDERS||!st.pq)return [];return ORDERS.filter(function(o){return o.pn===st.pq.pn;}).map(function(o){return o.last4;});}
+function judgeOrd(text){
+  var lines=String(text).split(/\n/).map(function(l){return l.replace(/\D/g,"");}).filter(function(l){return l.length>=5;});
+  if(!lines.length)return null;var cs=cands();
+  /* 候補(品番で絞ったオーダー)に一致する行を優先し、なければ一番下の行の下4桁 */
+  for(var i=lines.length-1;i>=0;i--){if(cs.indexOf(lines[i].slice(-4))>=0)return lines[i].slice(-4);}
+  return lines[lines.length-1].slice(-4);
+}
+function judge(k,raw){
+  if(k==="ord")return judgeOrd(raw);
+  raw=raw.replace(/\s/g,"");var m=raw.match(/^\d{1,2}$/);if(!m)return null;var n=+m[0];return (n>=1&&n<=99)?String(n):null;
+}
+function ocrOne(k,c){
+  var vars=[pad(c),pad(otsu(c))];
+  return worker.setParameters({tessedit_pageseg_mode:k==="ord"?"6":"7"}).then(function(){return worker.recognize(vars[0]);}).then(function(r1){
+    return worker.recognize(vars[1]).then(function(r2){return [r1.data.text,r2.data.text];});
+  }).then(function(raws){
+    raws.forEach(function(raw){var v=judge(k,raw);if(v){st.votes[k][v]=(st.votes[k][v]||0)+1;
+      if(st.votes[k][v]>=NEED&&!st.fixed[k]){st.fixed[k]=v;log("確定 "+k+"="+v);
+        if(k==="ord")fillOrders();check();}}});
+    return raws;
+  });
+}
+function prepWorker(){
+  var t0=performance.now();
+  return Tesseract.createWorker("eng",1,{langPath:"https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int",gzip:true})
+  .then(function(w){worker=w;return w.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"});})
+  .then(function(){workerReady=true;log("文字認識 準備OK "+Math.round(performance.now()-t0)+"ms");});
+}
+
+/* ---------- 重ね描き ---------- */
+function drawGuide(){
+  var W=video.clientWidth,H=video.clientHeight;if(!W||!H)return;
+  var dpr=window.devicePixelRatio||1;
+  if(ov.width!==W*dpr||ov.height!==H*dpr){ov.width=W*dpr;ov.height=H*dpr;}
+  octx.setTransform(dpr,0,0,dpr,0,0);octx.clearRect(0,0,W,H);
+  if(!token)return; /* 認証QRを読むときは枠を出さない */
+  var lw=LABEL.u1-LABEL.u0,lh=LABEL.v1-LABEL.v0;var top0=56,bot0=44;var s=Math.min(W*0.9/lw,(H-top0-bot0)*0.95/lh);
+  var ox=(W-lw*s)/2-LABEL.u0*s,oy=top0+((H-top0-bot0)-lh*s)/2-LABEL.v0*s;
+  function r(b,col,dash){octx.setLineDash(dash||[]);octx.strokeStyle=col;octx.lineWidth=2;octx.strokeRect(ox+b.u0*s,oy+b.v0*s,(b.u1-b.u0)*s,(b.v1-b.v0)*s);}
+  r(LABEL,"rgba(255,255,255,.85)");r({u0:0,v0:0,u1:1,v1:1},"rgba(76,195,138,.95)");
+  r(BOX.num,"rgba(239,83,80,.8)",[6,4]);r(BOX.ord,"rgba(66,165,245,.8)",[6,4]);octx.setLineDash([]);
+  if(lastQuad&&video.videoWidth&&Date.now()-lastSeen<1500){
+    var k=Math.max(W/video.videoWidth,H/video.videoHeight),dx=(W-video.videoWidth*k)/2,dy=(H-video.videoHeight*k)/2;
+    var q=lastQuad;function P(u,v){return [(q[0].x+u*(q[1].x-q[0].x)+v*(q[3].x-q[0].x))*k+dx,(q[0].y+u*(q[1].y-q[0].y)+v*(q[3].y-q[0].y))*k+dy];}
+    function poly(b,col,fill){var a=[P(b.u0,b.v0),P(b.u1,b.v0),P(b.u1,b.v1),P(b.u0,b.v1)];octx.beginPath();octx.moveTo(a[0][0],a[0][1]);for(var i=1;i<4;i++)octx.lineTo(a[i][0],a[i][1]);octx.closePath();if(fill){octx.fillStyle=fill;octx.fill();}octx.strokeStyle=col;octx.lineWidth=3;octx.stroke();}
+    poly({u0:0,v0:0,u1:1,v1:1},"#4cc38a","rgba(76,195,138,.25)");poly(BOX.num,"#ef5350");poly(BOX.ord,"#42a5f5");
+  }
+}
+
+/* ---------- 毎フレーム ---------- */
+function tick(){
+  drawGuide();renderScan();
+  if(busy||!stream||video.readyState<2||!window.ZXingWASM)return;
+  var vw=video.videoWidth,vh=video.videoHeight;if(!vw)return;
+  full.width=vw;full.height=vh;fctx.drawImage(video,0,0,vw,vh);
+  var sc=Math.min(1,1280/Math.max(vw,vh));small.width=Math.round(vw*sc);small.height=Math.round(vh*sc);
+  sctx.drawImage(full,0,0,small.width,small.height);
+  busy=true;var t0=performance.now();
+  ZXingWASM.readBarcodes(sctx.getImageData(0,0,small.width,small.height),{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1})
+  .then(function(res){
+    if(!res||!res.length||!res[0].isValid){busy=false;
+      if(token&&!(st.fixed.num&&st.fixed.ord))setStatus(st.qr?"QRが見えていません。ラベルを枠に合わせてください。":"QRを探しています… ラベルを白い枠に合わせ、緑の四角にQRを入れてください。");
+      return;}
+    var txt=res[0].text;
+    /* 認証QR */
+    if(/^US-[0-9A-F]{32}$/.test(txt)){busy=false;if(txt!==token)tryToken(txt);return;}
+    if(!token){busy=false;setStatus("先に本人用の認証QRを読んでください。","ng");return;}
+    var p=res[0].position;var q=[p.topLeft,p.topRight,p.bottomRight,p.bottomLeft].map(function(o){return {x:o.x/sc,y:o.y/sc};});
+    lastQuad=q;lastSeen=Date.now();var side=Math.hypot(q[1].x-q[0].x,q[1].y-q[0].y);
+    if(st.qr!==txt){
+      if(st.qr)log("別のQRを検出したので読み直し");
+      resetScan();st.qr=txt;st.pq=parseQR(txt);st.qrAt=Date.now();
+      if(navigator.vibrate)try{navigator.vibrate(60);}catch(e){}
+      $("qrLine").textContent=st.pq?("QR: 品番 "+st.pq.pn+" / "+st.pq.name+" / 1番目 "+st.pq.id+" / 日時 "+st.pq.dt+" / TOTAL "+st.pq.total):("QR(カートンラベルの書式ではありません): "+txt);
+      log("QR読取 "+(st.pq?st.pq.pn+" "+st.pq.id:txt.slice(0,40)));
+      if(st.pq)fillOrders();check();
+    }
+    if(!st.pq||!workerReady||(st.fixed.num&&st.fixed.ord)){busy=false;
+      if(st.pq&&!workerReady)setStatus("QRを読みました。文字認識の準備中…(初回は約6MBを読み込みます)");
+      else if(st.fixed.num&&st.fixed.ord)setStatus("QR・カートン番号・下4桁を読みました。範囲を入れて「記録する」を押してください。","ok");
+      return;}
+    var tq=performance.now();var cn=crop(q,BOX.num),co=crop(q,BOX.ord);
+    if(cn)$("numMini").src=cn.toDataURL();if(co)$("ordMini").src=co.toDataURL();
+    var p1=(!st.fixed.num&&cn)?ocrOne("num",cn):Promise.resolve(null);
+    return p1.then(function(){return (!st.fixed.ord&&co)?ocrOne("ord",co):null;}).then(function(){
+      renderScan();
+      if(!(st.fixed.num&&st.fixed.ord))setStatus("QR読取済。文字を読んでいます… QR一辺 "+Math.round(side)+"px / "+Math.round(performance.now()-tq)+"ms"+(side<120?"  ※もう少し近づけてください":""),side<120?"ng":"");
+      else setStatus("QR・カートン番号・下4桁を読みました。範囲を入れて「記録する」を押してください。","ok");
+      busy=false;});
+  }).catch(function(e){busy=false;setStatus("エラー: "+(e&&e.message||e),"ng");log("エラー "+(e&&e.message||e));});
+}
+
+function start(){
+  if(stream)return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus("カメラが使えません(HTTPSで開いているか確認してください)。","ng");return;}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false})
+  .then(function(s){stream=s;video.srcObject=s;video.play();
+    if(!worker)prepWorker().catch(function(e){log("tesseract失敗 "+e);});
+    timer=setInterval(tick,200);
+    setStatus(token?"カートンラベルを白い枠に合わせてください。":"本人用の認証QRを写してください。");})
+  .catch(function(e){setStatus("カメラを開始できません: "+e.name,"ng");});
+}
+function stop(){if(timer){clearInterval(timer);timer=null;}if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}lastQuad=null;drawGuide();setStatus("停止中。");}
+$("start").addEventListener("click",start);
+$("stop").addEventListener("click",stop);
+$("rescan").addEventListener("click",function(){resetScan();clearMini();check();setStatus("読み直します。ラベルを枠に合わせてください。");});
+document.addEventListener("visibilitychange",function(){if(document.hidden)stop();});
+window.addEventListener("resize",drawGuide);
+
+resetScan();check();
+var saved=null;try{saved=localStorage.getItem(TOKEN_KEY);}catch(e){}
+if(saved)tryToken(saved);else{setLogin("");setStatus("「開始」を押して、本人用の認証QRを写してください。");}
+})();
+</script>
+</body>
+</html>

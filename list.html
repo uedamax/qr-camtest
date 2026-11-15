@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>パレット確認一覧</title>
+<style>
+:root{--bg:#f4f6f8;--fg:#14202b;--sub:#5b6875;--line:#d5dbe1;--panel:#fff;--accent:#0b6bcb;--ok:#13804a;--ng:#c62828;--warn:#b26a00;--okbg:#e6f4ec;--ngbg:#fdecec;--warnbg:#fff4e0;--head:#e9eef3}
+@media (prefers-color-scheme:dark){:root{--bg:#10171e;--fg:#e6ebf0;--sub:#93a1ae;--line:#2a3640;--panel:#17212a;--accent:#5aa9f0;--ok:#4cc38a;--ng:#ef6b6b;--warn:#f0b04c;--okbg:#14301f;--ngbg:#3a1717;--warnbg:#3a2c12;--head:#1d2a35;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 -apple-system,"Hiragino Sans","Noto Sans JP","Yu Gothic UI","Meiryo",sans-serif;
+ padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(24px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+h1{font-size:17px;margin:0}
+.ver{color:var(--sub);font-size:11px}
+.bar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0}
+button,select,input{font:inherit;border:1px solid var(--line);border-radius:6px;background:var(--panel);color:var(--fg);padding:6px 10px;min-height:38px}
+button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.sum{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.sum div{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 10px;min-width:7em}
+.sum b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.sum .ok b{color:var(--ok)}.sum .ng b{color:var(--ng)}.sum .warn b{color:var(--warn)}
+.status{font-size:12px;color:var(--sub);min-height:1.3em}.status.ng{color:var(--ng)}
+.wrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:8px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top;white-space:nowrap}
+th{background:var(--head);position:sticky;top:0;font-weight:normal;color:var(--sub);font-size:12px}
+td.memo{white-space:normal;min-width:10em}
+tr.ok td:first-child{border-left:5px solid var(--ok)}tr.ng td:first-child{border-left:5px solid var(--ng)}tr.warn td:first-child{border-left:5px solid var(--warn)}tr.none td:first-child{border-left:5px solid var(--line)}
+.tag{display:inline-block;border-radius:4px;padding:0 6px;font-size:12px}
+.tag.ok{background:var(--okbg);color:var(--ok)}.tag.ng{background:var(--ngbg);color:var(--ng)}.tag.warn{background:var(--warnbg);color:var(--warn)}.tag.none{background:var(--bg);color:var(--sub)}
+.login{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0}
+.login input{width:100%;margin:6px 0}
+.hidden{display:none!important}
+/* スマホ: 表をカードにする */
+@media (max-width:640px){
+ .wrap{background:none;border:none}
+ table,tbody,tr,td{display:block;width:100%}
+ thead{display:none}
+ tr{background:var(--panel);border:1px solid var(--line);border-radius:8px;margin-bottom:6px;padding:6px 8px}
+ tr.ok,tr.ng,tr.warn,tr.none{border-left-width:6px}
+ tr.ok{border-left-color:var(--ok)}tr.ng{border-left-color:var(--ng)}tr.warn{border-left-color:var(--warn)}
+ td{border:none;padding:1px 0;white-space:normal}
+ td:first-child{border-left:none!important;font-size:18px;font-weight:bold}
+ td[data-l]:before{content:attr(data-l)" : ";color:var(--sub);font-size:12px}
+ td:empty{display:none}
+}
+</style>
+</head>
+<body>
+<h1>パレット確認一覧(引っ越し用・試作)</h1>
+<div class="ver">第1.0版 / 2026-11-15</div>
+
+<div class="login hidden" id="login">
+ <div>この端末はまだログインしていません。スマホでは <a href="pallet.html">パレット確認</a> で認証QRを読むと、この一覧も見られます。PCでは、管理者から受け取ったトークン(US-で始まる文字列)を貼り付けてください。</div>
+ <input id="tok" placeholder="US-xxxxxxxx…" autocomplete="off"><button id="tokGo">ログイン</button>
+</div>
+
+<div class="bar">
+ <button id="tabSerial" class="on">通番別</button><button id="tabOrder">オーダー別</button>
+ <select id="filter">
+  <option value="todo">未確認のみ</option>
+  <option value="diff">差異ありのみ</option>
+  <option value="all">すべて</option>
+ </select>
+ <input id="q" placeholder="通番 / オーダー / 下4桁" style="width:11em">
+ <label>通番 1〜<input id="maxSerial" inputmode="numeric" value="300" style="width:4.5em"></label>
+ <button id="reload">更新</button>
+</div>
+<div class="sum" id="sum"></div>
+<div class="status" id="status"></div>
+<div class="wrap"><table><thead id="th"></thead><tbody id="tb"></tbody></table></div>
+
+<script>
+(function(){
+"use strict";
+var API="https://script.google.com/macros/s/AKfycbyegIoGqW6QQdi3U4RpDKIk0b5EtnlWBiUMpWdm49dqfI1tMGsjLb-uPcuEbJ7EYInv7w/exec";
+var TOKEN_KEY="qr_lookup_token_v1",PREF_KEY="pallet_list_pref_v1";
+var $=function(id){return document.getElementById(id);};
+var token=null,data=null,tab="serial";
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function setStatus(t,c){$("status").textContent=t;$("status").className="status "+(c||"");}
+function api(body){body.token=token;return fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});}
+
+/* 表示の設定はこの端末だけに保存 */
+try{var pf=JSON.parse(localStorage.getItem(PREF_KEY)||"{}");if(pf.filter)$("filter").value=pf.filter;if(pf.max)$("maxSerial").value=pf.max;if(pf.tab)tab=pf.tab;}catch(e){}
+function savePref(){try{localStorage.setItem(PREF_KEY,JSON.stringify({filter:$("filter").value,max:$("maxSerial").value,tab:tab}));}catch(e){}}
+
+function load(){
+  setStatus("読込中…");
+  api({action:"list"}).then(function(j){
+    if(!j.ok){if(j.error==="unauthorized"){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;$("login").classList.remove("hidden");}throw new Error(j.error);}
+    data=j;$("login").classList.add("hidden");setStatus("更新 "+j.at+"(記録 "+j.records.length+"件)");render();
+  }).catch(function(e){setStatus("読込に失敗: "+e.message,"ng");});
+}
+
+/* ---------- 通番別 ---------- */
+function serialRows(){
+  var max=Math.max(0,parseInt($("maxSerial").value,10)||0);
+  var rec={},sumi={};data.records.forEach(function(r){rec[r.serial]=r;});
+  data.sumi.forEach(function(s){(sumi[s.serial]=sumi[s.serial]||[]).push(s);});
+  var keys={};for(var i=1;i<=max;i++)keys[String(i)]=1;
+  Object.keys(rec).forEach(function(k){keys[k]=1;});Object.keys(sumi).forEach(function(k){keys[k]=1;});
+  return Object.keys(keys).sort(function(a,b){return (+a||1e9)-(+b||1e9)||(a<b?-1:1);}).map(function(k){
+    var r=rec[k],s=sumi[k]||[];var diff=r&&(r.inRange==="×"||/^不一致|別オーダー/.test(r.sumiMatch)||!!r.note);
+    var cls=!r?"none":(r.confirmed?(diff?"warn":"ok"):"ng");
+    return {serial:k,r:r,s:s,cls:cls,diff:!!diff,confirmed:!!(r&&r.confirmed)};
+  });
+}
+function renderSerial(){
+  var f=$("filter").value,q=$("q").value.trim().toUpperCase();
+  var all=serialRows();
+  var done=all.filter(function(x){return x.confirmed;}).length,un=all.filter(function(x){return x.r&&!x.r.confirmed;}).length,none=all.filter(function(x){return !x.r;}).length,diff=all.filter(function(x){return x.diff;}).length;
+  $("sum").innerHTML='<div class="ok">棚卸確認☑<b>'+done+'</b></div><div class="ng">記録あり・未確認<b>'+un+'</b></div><div>未記録<b>'+none+'</b></div><div class="warn">差異あり<b>'+diff+'</b></div><div>対象の通番<b>'+all.length+'</b></div>';
+  var rows=all.filter(function(x){
+    if(f==="todo"&&x.confirmed)return false;
+    if(f==="diff"&&!x.diff)return false;
+    if(q){var hay=(x.serial+" "+(x.r?x.r.order:"")+" "+x.s.map(function(s){return s.order;}).join(" ")).toUpperCase();
+      if(/^\d{1,3}$/.test(q))return x.serial===q;return hay.indexOf(q)>=0;}
+    return true;});
+  $("th").innerHTML="<tr><th>通番</th><th>状態</th><th>オーダー</th><th>カートン番号</th><th>箱数</th><th>読取番号</th><th>住友リスト</th><th>担当</th><th>日時</th><th>メモ</th></tr>";
+  $("tb").innerHTML=rows.map(function(x){var r=x.r;
+    var tag=!r?'<span class="tag none">未記録</span>':(r.confirmed?'<span class="tag ok">☑ 確認済</span>':'<span class="tag ng">□ 未確認</span>')+(x.diff?' <span class="tag warn">差異</span>':'');
+    var sumi=x.s.length?x.s.map(function(s){return esc(s.order)+(s.from?" "+s.from+"〜"+s.to:"");}).join(", "):"";
+    if(r&&r.sumiMatch)sumi=(sumi?sumi+" / ":"")+esc(r.sumiMatch);
+    return '<tr class="'+x.cls+'"><td>'+esc(x.serial)+'</td><td data-l="状態">'+tag+'</td><td data-l="オーダー">'+(r?esc(r.order):"")+'</td><td data-l="カートン番号">'+(r?r.from+"〜"+r.to:"")+'</td><td data-l="箱数">'+(r?r.count:"")+'</td><td data-l="読取番号">'+(r&&r.scanned?esc(r.scanned)+" ("+esc(r.inRange)+")":"")+'</td><td data-l="住友">'+sumi+'</td><td data-l="担当">'+(r?esc(r.by):"")+'</td><td data-l="日時">'+(r?esc(r.at):"")+'</td><td class="memo" data-l="メモ">'+(r?esc(r.note):"")+'</td></tr>';
+  }).join("")||'<tr><td colspan="10">該当なし</td></tr>';
+}
+
+/* ---------- オーダー別 ---------- */
+function compress(a){var out=[],s=null,p=null;a.forEach(function(n){if(s===null){s=p=n;}else if(n===p+1){p=n;}else{out.push(s===p?s:s+"〜"+p);s=p=n;}});if(s!==null)out.push(s===p?s:s+"〜"+p);return out.join(", ");}
+function orderRows(){
+  var by={};data.records.forEach(function(r){(by[r.order]=by[r.order]||[]).push(r);});
+  var sumiBy={};data.sumi.forEach(function(s){(sumiBy[s.order]=sumiBy[s.order]||[]).push(s);});
+  return data.orders.map(function(o){
+    var rs=by[o.order]||[],seen={},dup={},conf=0;
+    rs.filter(function(r){return r.confirmed;}).forEach(function(r){for(var n=r.from;n<=r.to;n++){if(seen[n])dup[n]=1;seen[n]=1;}});
+    var miss=[];for(var n=1;n<=o.cartons;n++){if(seen[n])conf++;else miss.push(n);}
+    var over=Object.keys(seen).map(Number).filter(function(n){return n>o.cartons;});
+    var dups=Object.keys(dup).map(Number).sort(function(a,b){return a-b;});
+    var unconf=rs.filter(function(r){return !r.confirmed;}).length;
+    var done=miss.length===0&&!dups.length&&!over.length&&o.cartons>0;
+    var cls=done?"ok":(rs.length?(dups.length||over.length?"warn":"ng"):"none");
+    return {o:o,rs:rs,conf:conf,miss:miss,dups:dups,over:over,unconf:unconf,done:done,cls:cls,sumi:sumiBy[o.order]||[],diff:!!(dups.length||over.length)};
+  });
+}
+function renderOrder(){
+  var f=$("filter").value,q=$("q").value.trim().toUpperCase();
+  var all=orderRows();
+  var done=all.filter(function(x){return x.done;}).length,part=all.filter(function(x){return !x.done&&x.rs.length;}).length,none=all.filter(function(x){return !x.rs.length;}).length;
+  var tc=all.reduce(function(a,x){return a+x.o.cartons;},0),cc=all.reduce(function(a,x){return a+x.conf;},0);
+  $("sum").innerHTML='<div class="ok">全箱確認済<b>'+done+'</b></div><div class="ng">一部のみ<b>'+part+'</b></div><div>記録なし<b>'+none+'</b></div><div class="warn">重複・超過<b>'+all.filter(function(x){return x.diff;}).length+'</b></div><div>確認済の箱<b>'+cc+' / '+tc+'</b></div>';
+  var rows=all.filter(function(x){
+    if(f==="todo"&&x.done)return false;
+    if(f==="diff"&&!x.diff)return false;
+    if(q){var hay=(x.o.order+" "+x.o.pn+" "+x.rs.map(function(r){return "#"+r.serial;}).join(" ")).toUpperCase();return hay.indexOf(q)>=0;}
+    return true;});
+  $("th").innerHTML="<tr><th>オーダー</th><th>状態</th><th>確認済/全箱</th><th>未確認の番号</th><th>通番(範囲)</th><th>重複・超過</th><th>品番</th><th>抵抗値</th><th>搬入日</th></tr>";
+  $("tb").innerHTML=rows.slice(0,600).map(function(x){var o=x.o;
+    var tag=x.done?'<span class="tag ok">☑ 全箱確認</span>':(x.rs.length?'<span class="tag ng">一部</span>':'<span class="tag none">記録なし</span>');
+    if(x.unconf)tag+=' <span class="tag warn">未確認の記録 '+x.unconf+'</span>';
+    var pal=x.rs.map(function(r){return (r.confirmed?"☑":"□")+"#"+esc(r.serial)+"("+r.from+"〜"+r.to+")";}).join(" ");
+    var bad=(x.dups.length?"重複 "+compress(x.dups):"")+(x.over.length?" 超過 "+compress(x.over):"");
+    return '<tr class="'+x.cls+'"><td>'+esc(o.order)+'</td><td data-l="状態">'+tag+'</td><td data-l="確認済/全箱">'+x.conf+' / '+o.cartons+'</td><td class="memo" data-l="未確認の番号">'+(x.miss.length&&x.miss.length<o.cartons?compress(x.miss):(x.miss.length?"全部":""))+'</td><td class="memo" data-l="通番">'+pal+'</td><td data-l="重複・超過">'+esc(bad)+'</td><td data-l="品番">'+esc(o.pn)+'</td><td data-l="抵抗値">'+esc(o.item)+'</td><td data-l="搬入日">'+esc(o.date)+'</td></tr>';
+  }).join("")||'<tr><td colspan="9">該当なし</td></tr>';
+}
+
+function render(){
+  $("tabSerial").className=tab==="serial"?"on":"";$("tabOrder").className=tab==="order"?"on":"";
+  $("maxSerial").parentNode.classList.toggle("hidden",tab!=="serial");
+  if(!data)return;if(tab==="serial")renderSerial();else renderOrder();
+}
+$("tabSerial").addEventListener("click",function(){tab="serial";savePref();render();});
+$("tabOrder").addEventListener("click",function(){tab="order";savePref();render();});
+["filter","maxSerial"].forEach(function(id){$(id).addEventListener("change",function(){savePref();render();});});
+$("q").addEventListener("input",render);
+$("reload").addEventListener("click",function(){if(token)load();});
+$("tokGo").addEventListener("click",function(){var t=$("tok").value.trim();if(!/^US-[0-9A-F]{32}$/i.test(t)){setStatus("トークンの形式が違います。","ng");return;}token=t.toUpperCase();try{localStorage.setItem(TOKEN_KEY,token);}catch(e){}load();});
+
+try{token=localStorage.getItem(TOKEN_KEY);}catch(e){}
+render();
+if(token)load();else{$("login").classList.remove("hidden");setStatus("ログインしてください。");}
+})();
+</script>
+</body>
+</html>
