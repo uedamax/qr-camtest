@@ -79,15 +79,30 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 .match{border:2px solid var(--accent)}
 .mgrid{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline}
 .mgrid .k{font-size:12px;color:var(--sub);white-space:nowrap}
-.mgrid .v{font-size:20px;font-weight:bold;font-variant-numeric:tabular-nums;word-break:break-all}
+.mgrid .v{font-size:20px;font-weight:bold;font-variant-numeric:tabular-nums;word-break:break-all;color:var(--fg)}
+.mgrid .v.big{font-size:min(7.6vw,34px);font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;word-break:normal;letter-spacing:.01em;line-height:1.2}
+.mgrid .k{align-self:center}
+#matchBody{color:var(--fg)}
+.mserial .n{color:var(--fg)}
 .mserial{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;padding:6px 10px;border-radius:8px;background:var(--okbg)}
 .mserial .n{font-size:44px;font-weight:bold;line-height:1;white-space:nowrap}
 .mserial .t{flex:1;min-width:0}
+.mserial{flex-wrap:wrap}
+.mserial .t.warnTxt{color:var(--ng);font-weight:800;font-size:min(6.4vw,26px);flex-basis:100%;order:3;white-space:nowrap}
+.mserial .t.warnTxt small{white-space:normal}
+.mserial .warnTxt small{font-size:13px;color:var(--fg);font-weight:normal}
+.mserial .sfix{margin-left:auto;align-self:center;font-size:15px;white-space:nowrap}
+.sfixbox{margin:6px 0;padding:8px;border:2px solid var(--accent);border-radius:8px}
+.sfixbox .row{display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:6px}
+.sfixbox input{width:5em;font-size:26px;font-weight:bold;text-align:center;padding:2px}
 .mserial.ng{background:var(--ngbg)}
 .mserial .t{font-size:13px;color:var(--fg)}
 .mpick{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;margin-top:6px}
 .mpick button{font-size:18px;font-weight:bold;min-width:4em}
 .mlots{font-size:13px;color:var(--fg);margin-top:4px}
+.mgrid .v.cno{text-align:right}
+.mgrid .cn{display:block;font-size:30px;line-height:1.1}
+.mgrid .cr{display:block;font-size:13px;font-weight:normal}
 .statusLine{margin-top:8px;padding:8px;border-radius:6px;font-weight:bold;background:var(--bg);border-left:5px solid var(--line)}
 .statusLine.ok{background:var(--okbg);border-left-color:var(--ok)}
 .statusLine.ng{background:var(--ngbg);border-left-color:var(--ng)}
@@ -135,7 +150,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.6版 / 2026-11-15 / ラベルを読んでリストと照合・通番を自動表示</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.7版 / 2026-11-15 / 照合表示の並びをラベルに合わせる</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="logout" class="hidden">ログアウト</button>
 </div>
@@ -158,7 +173,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
 
 <div class="panel match" id="matchCard">
  <h2>リストとの照合(ラベル・パレットのフィルムと見比べてください)</h2>
- <div id="matchBody" class="meta">カートンラベルを読むと、リストの通番・オーダー・品名を表示します。</div>
+ <div id="matchBody">カートンラベルを読むと、リストの通番・オーダー・品名を表示します。</div>
 </div>
 
 <div class="panel" id="ordPanel">
@@ -338,7 +353,7 @@ var serialAuto=true,matchKey="",lastMatch=null;
 function fullOrder(o){var p=String(o.prefix||"");if(/^\d+$/.test(p))p=("000"+p).slice(-3);return (p?p+"-":"")+o.order;}
 function runMatch(force){
   var pq=st.pq,o=cur.order,n=st.fixed.num?+st.fixed.num:null;
-  var key=(pq?pq.pn:"")+"|"+(o?o.order:"")+"|"+(n||"")+"|"+SUMI.length;
+  var key=(pq?pq.pn:"")+"|"+(o?o.order:"")+"|"+(n||"")+"|"+SUMI.length+"|"+serial();
   if(!force&&key===matchKey)return;matchKey=key;
   var body=$("matchBody");
   if(!pq){body.innerHTML="カートンラベルを読むと、リストの通番・オーダー・品名を表示します。";lastMatch=null;return;}
@@ -350,19 +365,24 @@ function runMatch(force){
   /* 通番 */
   if(!o)h+='<div class="mserial ng"><span class="t">オーダーが決まると通番を探します(OCRの下4桁か、下の一覧で選択)</span></div>';
   else if(!rows.length)h+='<div class="mserial ng"><span class="t">住友リストに '+esc(o.order)+' がありません</span></div>';
-  else if(hit.length===1)h+='<div class="mserial"><span class="n">通番 '+esc(hit[0].serial)+'</span><span class="t">フィルムの手書き番号と同じか確認してください</span></div>';
+  else if(hit.length===1){var cs=serial()||hit[0].serial;h+='<div class="mserial'+(cs!==hit[0].serial?' ng':'')+'"><span class="n">通番 '+esc(cs)+'</span><span class="t warnTxt">フィルムの手書きを確認！'+(cs!==hit[0].serial?'<br><small>リストでは通番 '+esc(hit[0].serial)+'</small>':'')+'</span><button type="button" id="sfixBtn" class="sfix">通番修正</button></div>';}
   else h+='<div class="mserial ng"><span class="t">'+(n===null?"カートン番号が決まると通番を絞れます。":"カートン番号 "+n+" を含む通番がリストにありません。")+'候補から選べます:</span></div>';
   /* ラベルと同じ項目 */
   h+='<div class="mgrid">';
-  h+='<span class="k">OrderNo</span><span class="v">'+(o?esc(fullOrder(o)):'<span class="meta">未確定</span>')+'</span>';
-  h+='<span class="k">Gentherm-#</span><span class="v">'+esc(pq.pn)+'</span>';
-  h+='<span class="k">NAME</span><span class="v">'+esc(pq.name)+(o&&o.item!==pq.name?' <span class="meta">(リスト: '+esc(o.item)+')</span>':'')+'</span>';
-  var rng=hit.length===1?" (この通番は "+hit[0].from+"〜"+hit[0].to+")":"";
-  h+='<span class="k">カートン番号</span><span class="v">'+(n!==null?n+(st.manual.num?" ✎":""):'<span class="meta">未読取</span>')+'<span class="meta">'+rng+(o?" / 全 "+o.cartons+"箱":"")+'</span></span>';
+  h+='<span class="k">Gentherm-#</span><span class="v big">'+esc(pq.pn)+'</span>';
+  h+='<span class="k">NAME</span><span class="v big">'+esc(pq.name)+'</span>';
+  if(o&&o.item!==pq.name)h+='<span class="k"></span><span class="v"><span class="meta">リストでは '+esc(o.item)+'</span></span>';
+  h+='<span class="k">OrderNo</span><span class="v big">'+(o?esc(fullOrder(o)):'<span class="meta">未確定</span>')+'</span>';
+  var rng=(hit.length===1?"カートン番号は "+hit[0].from+"〜"+hit[0].to:"")+(o?(hit.length===1?" / ":"")+"全 "+o.cartons+"箱":"");
+  h+='<span class="k">カートン番号</span><span class="v cno">'+(n!==null?'<span class="cn">'+n+(st.manual.num?" ✎":"")+'</span>':'<span class="meta">未読取</span>')+(rng?'<span class="meta cr">'+rng+'</span>':'')+'</span>';
   h+='</div>';
   if(pq.lots.length)h+='<div class="mlots">LOT: '+pq.lots.map(function(x){var a=x.split("=");return esc(a[0])+" × "+Number(a[1]).toLocaleString();}).join(" / ")+' / TOTAL '+Number(pq.total||0).toLocaleString()+'</div>';
   if(cands.length>1||(cands.length&&hit.length!==1))h+='<div class="mpick">'+cands.map(function(r){return '<button type="button" data-s="'+esc(r.serial)+'">通番 '+esc(r.serial)+'<br><small>'+r.from+'〜'+r.to+'</small></button>';}).join("")+'</div>';
+  h+='<div id="sfixBox" class="sfixbox hidden"><div class="meta">フィルムに手書きされた通番を入れてください。記録には入れた通番が使われます。</div><div class="row"><input id="sfixIn" inputmode="numeric" maxlength="4"><button type="button" id="sfixNo">やめる</button><button type="button" id="sfixOk" class="primary">この通番にする</button></div></div>';
   body.innerHTML=h;
+  if($("sfixBtn"))$("sfixBtn").addEventListener("click",function(){$("sfixBox").classList.remove("hidden");$("sfixIn").value=serial();$("sfixIn").focus();});
+  $("sfixNo").addEventListener("click",function(){$("sfixBox").classList.add("hidden");});
+  $("sfixOk").addEventListener("click",function(){var v=$("sfixIn").value.replace(/\D/g,"");if(!v){toast("通番を入れてください","ng","タップで閉じる");return;}applySerial(v,true);$("serialInfo").textContent="(フィルムの手書きで修正)";matchKey="";runMatch(true);toast("通番を "+v+" にしました","ok");});
   [].forEach.call(body.querySelectorAll(".mpick button"),function(b){b.addEventListener("click",function(){applySerial(b.dataset.s,true);});});
   if(hit.length===1)applySerial(hit[0].serial,false);
 }
