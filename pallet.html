@@ -76,6 +76,18 @@ textarea{width:100%;min-height:48px;font-size:14px}
 details{margin-top:8px}
 pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px;font-size:11px;white-space:pre-wrap;max-height:30vh;overflow:auto;margin:0}
 .hidden{display:none!important}
+.match{border:2px solid var(--accent)}
+.mgrid{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;align-items:baseline}
+.mgrid .k{font-size:12px;color:var(--sub);white-space:nowrap}
+.mgrid .v{font-size:20px;font-weight:bold;font-variant-numeric:tabular-nums;word-break:break-all}
+.mserial{display:flex;align-items:baseline;gap:10px;margin-bottom:6px;padding:6px 10px;border-radius:8px;background:var(--okbg)}
+.mserial .n{font-size:44px;font-weight:bold;line-height:1;white-space:nowrap}
+.mserial .t{flex:1;min-width:0}
+.mserial.ng{background:var(--ngbg)}
+.mserial .t{font-size:13px;color:var(--fg)}
+.mpick{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;margin-top:6px}
+.mpick button{font-size:18px;font-weight:bold;min-width:4em}
+.mlots{font-size:13px;color:var(--fg);margin-top:4px}
 .statusLine{margin-top:8px;padding:8px;border-radius:6px;font-weight:bold;background:var(--bg);border-left:5px solid var(--line)}
 .statusLine.ok{background:var(--okbg);border-left-color:var(--ok)}
 .statusLine.ng{background:var(--ngbg);border-left-color:var(--ng)}
@@ -123,11 +135,11 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.5版 / 2026-11-15 / 確認の取消に確認画面</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.6版 / 2026-11-15 / ラベルを読んでリストと照合・通番を自動表示</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="logout" class="hidden">ログアウト</button>
 </div>
-<div class="serial"><label for="serial">通番</label><input id="serial" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="1〜300"><span class="meta" id="serialInfo"></span></div>
+<div class="serial"><label for="serial">通番</label><input id="serial" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="自動"><span class="meta" id="serialInfo"></span></div>
 
 <div class="stage qrng" id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas>
  <div class="hud">
@@ -143,6 +155,11 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <button id="start" class="primary">開始</button>
 </div>
 <div class="status" id="status"></div>
+
+<div class="panel match" id="matchCard">
+ <h2>リストとの照合(ラベル・パレットのフィルムと見比べてください)</h2>
+ <div id="matchBody" class="meta">カートンラベルを読むと、リストの通番・オーダー・品名を表示します。</div>
+</div>
 
 <div class="panel" id="ordPanel">
  <h2>オーダー(QRの品番で絞込み → OCRの下4桁で仮選択。ラベルを見て、人が確定してください)</h2>
@@ -191,7 +208,7 @@ var video=$("video"),ov=$("ov"),octx=ov.getContext("2d");
 var full=document.createElement("canvas"),fctx=full.getContext("2d",{willReadFrequently:true});
 var small=document.createElement("canvas"),sctx=small.getContext("2d",{willReadFrequently:true});
 var stream=null,timer=null,busy=false,worker=null,workerReady=false,lastQuad=null,lastSeen=0;
-var token=null,userName="",ORDERS=null;
+var token=null,userName="",ORDERS=null,SUMI=[];
 
 /* ラベル上の位置(QRの一辺=1、QR左上が原点) */
 var LABEL={u0:-6.2,v0:-0.6,u1:1.5,v1:4.4};
@@ -207,7 +224,7 @@ function setStatus(t,c){var s=$("status");s.textContent=t;s.className="status "+
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
 
 /* ---------- 待ち時間の表示 ---------- */
-var LBL={whoami:"認証を確認中",candidates:"オーダー一覧を読込中",palletInfo:"通番の情報を確認中",saveRange:"記録中",unconfirm:"棚卸確認を取消中"};
+var LBL={whoami:"認証を確認中",sumiAll:"住友リストを読込中",candidates:"オーダー一覧を読込中",palletInfo:"通番の情報を確認中",saveRange:"記録中",unconfirm:"棚卸確認を取消中"};
 var DEF={whoami:3,candidates:4,palletInfo:3,saveRange:5,unconfirm:5,ocr:8};
 var tasks={},taskSeq=0,busyTimer=null;
 function expectSec(k){try{var v=+localStorage.getItem("pallet_wait_"+k);if(v>0)return v;}catch(e){}return DEF[k]||4;}
@@ -259,8 +276,10 @@ function loadOrders(){
   setStatus("オーダー一覧を読込中…");
   return api({action:"candidates",pn:""}).then(function(j){
     if(!j.ok)throw new Error(j.error);ORDERS=j.orders;log("オーダー "+ORDERS.length+"件");
-    setStatus("準備OK。通番を入れて、カートンラベルを枠に合わせてください。","ok");
-    if(st.pq)fillOrders();
+    return api({action:"sumiAll"}).then(function(k){
+      SUMI=k.ok?k.rows:[];log("住友リスト "+SUMI.length+"行");
+      setStatus("準備OK。カートンラベルを枠に合わせてください。","ok");
+      if(st.pq)fillOrders();runMatch(true);});
   }).catch(function(e){setStatus("オーダー一覧の読込に失敗: "+e.message,"ng");toast("オーダー一覧の読込に失敗","ng","タップで閉じます。画面を読み込み直してください");});
 }
 $("logout").addEventListener("click",function(){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;ORDERS=null;setLogin("");});
@@ -298,8 +317,8 @@ function selectOrder(code,how){
   var badge=o&&cur.orderBy==="ocr"?'<div class="ocrnote">OCRの下4桁で仮に選びました。ラベルのオーダー番号と同じか、目で確認してください。</div>':"";
   $("ordMeta").innerHTML=o?(badge+'<span class="ordbig">'+esc(o.order)+'</span>  品番 '+esc(o.pn)+' / '+esc(o.item)+' / <b>カートン '+o.cartons+'箱</b>(1〜'+o.cartons+') / 搬入 '+esc(o.date)):"";
   $("sumiInfo").textContent="";$("otherRecs").innerHTML="";
-  if(o)loadInfo();
-  check();
+  if(o&&serial())loadInfo();
+  check();runMatch();
 }
 $("ordSel").addEventListener("change",function(){selectOrder(this.value,"person");});
 $("ordManual").addEventListener("input",function(){if(this.value.replace(/\D/g,"").length===4)fillOrders();});
@@ -314,6 +333,49 @@ function loadInfo(){
   }).catch(function(e){$("sumiInfo").textContent="情報の取得に失敗: "+e.message;toast("通番の情報を取得できませんでした","ng","タップで閉じます");});
 }
 function sumiFor(){if(!cur.info||!cur.order)return null;return cur.info.sumi.filter(function(x){return x.order===cur.order.order;})[0]||null;}
+/* ---------- カートンラベルとリストの照合 ---------- */
+var serialAuto=true,matchKey="",lastMatch=null;
+function fullOrder(o){var p=String(o.prefix||"");if(/^\d+$/.test(p))p=("000"+p).slice(-3);return (p?p+"-":"")+o.order;}
+function runMatch(force){
+  var pq=st.pq,o=cur.order,n=st.fixed.num?+st.fixed.num:null;
+  var key=(pq?pq.pn:"")+"|"+(o?o.order:"")+"|"+(n||"")+"|"+SUMI.length;
+  if(!force&&key===matchKey)return;matchKey=key;
+  var body=$("matchBody");
+  if(!pq){body.innerHTML="カートンラベルを読むと、リストの通番・オーダー・品名を表示します。";lastMatch=null;return;}
+  var rows=o?SUMI.filter(function(r){return r.order===o.order;}):[];
+  var hit=n!==null?rows.filter(function(r){return r.from&&r.to&&n>=r.from&&n<=r.to;}):[];
+  var cands=hit.length?hit:rows;
+  lastMatch={rows:rows,hit:hit};
+  var h="";
+  /* 通番 */
+  if(!o)h+='<div class="mserial ng"><span class="t">オーダーが決まると通番を探します(OCRの下4桁か、下の一覧で選択)</span></div>';
+  else if(!rows.length)h+='<div class="mserial ng"><span class="t">住友リストに '+esc(o.order)+' がありません</span></div>';
+  else if(hit.length===1)h+='<div class="mserial"><span class="n">通番 '+esc(hit[0].serial)+'</span><span class="t">フィルムの手書き番号と同じか確認してください</span></div>';
+  else h+='<div class="mserial ng"><span class="t">'+(n===null?"カートン番号が決まると通番を絞れます。":"カートン番号 "+n+" を含む通番がリストにありません。")+'候補から選べます:</span></div>';
+  /* ラベルと同じ項目 */
+  h+='<div class="mgrid">';
+  h+='<span class="k">OrderNo</span><span class="v">'+(o?esc(fullOrder(o)):'<span class="meta">未確定</span>')+'</span>';
+  h+='<span class="k">Gentherm-#</span><span class="v">'+esc(pq.pn)+'</span>';
+  h+='<span class="k">NAME</span><span class="v">'+esc(pq.name)+(o&&o.item!==pq.name?' <span class="meta">(リスト: '+esc(o.item)+')</span>':'')+'</span>';
+  var rng=hit.length===1?" (この通番は "+hit[0].from+"〜"+hit[0].to+")":"";
+  h+='<span class="k">カートン番号</span><span class="v">'+(n!==null?n+(st.manual.num?" ✎":""):'<span class="meta">未読取</span>')+'<span class="meta">'+rng+(o?" / 全 "+o.cartons+"箱":"")+'</span></span>';
+  h+='</div>';
+  if(pq.lots.length)h+='<div class="mlots">LOT: '+pq.lots.map(function(x){var a=x.split("=");return esc(a[0])+" × "+Number(a[1]).toLocaleString();}).join(" / ")+' / TOTAL '+Number(pq.total||0).toLocaleString()+'</div>';
+  if(cands.length>1||(cands.length&&hit.length!==1))h+='<div class="mpick">'+cands.map(function(r){return '<button type="button" data-s="'+esc(r.serial)+'">通番 '+esc(r.serial)+'<br><small>'+r.from+'〜'+r.to+'</small></button>';}).join("")+'</div>';
+  body.innerHTML=h;
+  [].forEach.call(body.querySelectorAll(".mpick button"),function(b){b.addEventListener("click",function(){applySerial(b.dataset.s,true);});});
+  if(hit.length===1)applySerial(hit[0].serial,false);
+}
+function applySerial(sn,byPerson){
+  if(!byPerson&&!serialAuto&&serial()&&serial()!==sn){check();return;} /* 人が入れた通番は上書きしない */
+  if(byPerson)serialAuto=false;
+  if(serial()!==sn){$("serial").value=sn;$("serialInfo").textContent=byPerson?"(候補から選択)":"(リストから自動)";justSaved=null;loadInfo();}
+  var r=SUMI.filter(function(x){return x.serial===sn&&cur.order&&x.order===cur.order.order;})[0];
+  if(r&&r.from&&r.to&&!$("from").value&&!$("to").value){$("from").value=r.from;$("to").value=r.to;}
+  check();
+}
+$("serial").addEventListener("input",function(){serialAuto=!this.value;$("serialInfo").textContent=this.value?"(手入力)":"";});
+
 /* ---------- この通番の状態と履歴(だれが・いつ) ---------- */
 function renderHistory(){
   var i=cur.info;var box=$("histBox");
@@ -359,6 +421,7 @@ $("serial").addEventListener("change",function(){$("serialInfo").textContent="";
 
 /* ---------- 範囲の判定 ---------- */
 function check(){
+  runMatch();
   var ul=$("checks"),items=[];var f=+$("from").value,t=+$("to").value;var o=cur.order;
   var valid=f>=1&&t<=99&&f<=t&&$("from").value!==""&&$("to").value!=="";
   $("cnt").textContent=valid?("= "+(t-f+1)+" 箱"):"";
@@ -383,6 +446,7 @@ function check(){
   }
   if(st.fixed.ord&&st.pq&&cands().indexOf(st.fixed.ord)<0)items.push(["warn","参考(OCR): 読み取った下4桁 "+st.fixed.ord+" は、品番 "+st.pq.pn+" の在庫オーダーにありません(読み違いか、在庫明細にないオーダー)"]);
   else if(st.fixed.ord&&o&&o.last4!==st.fixed.ord)items.push(["warn","参考(OCR): 選んだオーダーの下4桁("+o.last4+")が、読み取った下4桁("+st.fixed.ord+")と違います"]);
+  if(lastMatch&&lastMatch.hit.length===1&&serial()&&serial()!==lastMatch.hit[0].serial)items.push(["ng","住友リストでは、このカートンは通番 "+lastMatch.hit[0].serial+" です(入っている通番 "+serial()+")"]);
   if(st.pq&&o&&st.pq.pn!==o.pn)items.push(["ng","QRの品番("+st.pq.pn+")と、選んだオーダーの品番("+o.pn+")が違います"]);
   ul.innerHTML=items.map(function(x){return '<li class="'+x[0]+'">'+esc(x[1])+'</li>';}).join("");
   var cb=$("confirmed"),key=(o?o.order:"")+"|"+f+"|"+t;
@@ -416,11 +480,11 @@ $("save").addEventListener("click",function(){
   }).catch(function(e){$("saveStatus").textContent="記録に失敗しました: "+e.message+"(もう一度押してください)";$("saveStatus").className="status ng";toast("記録に失敗しました","ng","記録されていません。もう一度押してください(タップで閉じる)");check();});
 });
 $("next").addEventListener("click",function(){
-  var s=+serial();if(s)$("serial").value=s+1;$("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;$("save").textContent="記録する(未確認・差異あり)";
+  $("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;$("save").textContent="記録する(未確認・差異あり)";
   cur={order:null,info:null};$("ordMeta").textContent="";$("sumiInfo").textContent="";$("otherRecs").innerHTML="";$("myRecs").innerHTML="";$("histBox").classList.add("hidden");$("saveStatus").textContent="";
   $("ordSel").innerHTML='<option value="">(QRを読むと候補が出ます)</option>';$("ordManual").value="";$("useSumi").classList.add("hidden");
-  justSaved=null;resetScan();clearMini();check();setStatus("次のパレットです。カートンラベルを枠に合わせてください。");
-  toast("次のパレット: 通番 "+(serial()||"-"),"info");window.scrollTo({top:0,behavior:"smooth"});
+  justSaved=null;resetScan();clearMini();serialAuto=true;$("serial").value="";$("serialInfo").textContent="";matchKey="";lastMatch=null;runMatch(true);check();setStatus("次のパレットです。カートンラベルを枠に合わせてください。");
+  toast("次のパレットへ","info");window.scrollTo({top:0,behavior:"smooth"});
 });
 
 /* ---------- 読み取り表示 ---------- */
@@ -524,7 +588,7 @@ function ocrOne(k,c){
   }).then(function(raws){
     raws.forEach(function(raw){var v=judge(k,raw);if(v){st.votes[k][v]=(st.votes[k][v]||0)+1;
       if(st.votes[k][v]>=NEED&&!st.fixed[k]){st.fixed[k]=v;log("確定 "+k+"="+v);
-        if(k==="ord")fillOrders();check();}}});
+        if(k==="ord")fillOrders();check();runMatch();}}});
     return raws;
   });
 }
@@ -581,7 +645,7 @@ function tick(){
       toast(st.pq?"QRを読みました: "+st.pq.pn:"QRを読みました(カートンラベル以外)",st.pq?"ok":"info");
       $("qrLine").textContent=st.pq?("QR: 品番 "+st.pq.pn+" / "+st.pq.name+" / 1番目 "+st.pq.id+" / 日時 "+st.pq.dt+" / TOTAL "+st.pq.total):("QR(カートンラベルの書式ではありません): "+txt);
       log("QR読取 "+(st.pq?st.pq.pn+" "+st.pq.id:txt.slice(0,40)));
-      if(st.pq)fillOrders();check();
+      if(st.pq)fillOrders();check();runMatch();
     }
     if(!st.pq||!workerReady||(st.fixed.num&&st.fixed.ord)){busy=false;
       if(st.pq&&!workerReady)setStatus("QRを読みました。文字認識の準備中…(初回は約6MBを読み込みます)");
@@ -615,7 +679,7 @@ function start(){
 function stop(){if(timer){clearInterval(timer);timer=null;}if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}lastQuad=null;drawGuide();setStartBtn("");setStatus("停止中。");}
 $("start").addEventListener("click",start);
 $("stop").addEventListener("click",stop);
-$("rescan").addEventListener("click",function(){resetScan();clearMini();check();setStatus("読み直します。ラベルを枠に合わせてください。");toast("読み直します","info");});
+$("rescan").addEventListener("click",function(){resetScan();clearMini();matchKey="";runMatch(true);check();setStatus("読み直します。ラベルを枠に合わせてください。");toast("読み直します","info");});
 document.addEventListener("visibilitychange",function(){if(document.hidden)stop();});
 window.addEventListener("resize",drawGuide);
 
