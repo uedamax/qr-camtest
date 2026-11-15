@@ -82,6 +82,9 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 .statusLine small{display:block;font-weight:normal;color:var(--sub)}
 button.danger{background:var(--ng);border-color:var(--ng);color:#fff}
 #unconfReason{width:100%;margin-top:6px;font-size:15px}
+#unconfAsk{margin-top:6px;padding:10px;border:2px solid var(--ng);border-radius:8px;background:var(--ngbg)}
+.askMsg{font-weight:bold;line-height:1.5}
+.askMsg small{display:block;font-weight:normal;color:var(--sub)}
 #myRecs li.cancel{color:var(--ng)}
 .ocrnote{background:var(--warnbg);border-left:5px solid var(--warn);border-radius:6px;padding:3px 8px;font-size:13px;color:var(--fg);margin-bottom:4px}
 .confirm input:disabled+span{color:var(--sub);font-weight:normal}
@@ -120,7 +123,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.4版 / 2026-11-15 / 確認者の表示・確認の取消(履歴つき)</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.5版 / 2026-11-15 / 確認の取消に確認画面</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="logout" class="hidden">ログアウト</button>
 </div>
@@ -164,8 +167,9 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
   <div class="unconf hidden" id="unconfBox">
    <div class="btns"><button id="unconfBtn">この通番の棚卸確認を取り消す</button></div>
    <div id="unconfAsk" class="hidden">
+    <div class="askMsg" id="unconfMsg"></div>
     <input id="unconfReason" placeholder="取消の理由(任意) 例: 数え直しが必要">
-    <div class="btns"><button id="unconfNo">やめる</button><button id="unconfYes" class="danger">取り消す</button></div>
+    <div class="btns"><button id="unconfNo">やめる</button><button id="unconfYes" class="danger">はい、取り消す</button></div>
    </div>
   </div>
   <details><summary id="histSum">この通番の履歴</summary><ul class="recs" id="myRecs"></ul></details>
@@ -327,15 +331,18 @@ function renderHistory(){
     var what=r.kind==="取消"?"確認取消":(r.confirmed?"☑ 棚卸確認":"□ 記録(未確認)");
     return '<li class="'+(r.kind==="取消"?"cancel":"")+'">'+esc(r.at)+" "+esc(r.by)+" : "+what+" "+esc(r.order)+" "+r.from+"〜"+r.to+(r.scanSrc==="手入力"?" [番号手入力]":"")+(r.note?" / "+esc(r.note):"")+"</li>";}).join("");
 }
-$("unconfBtn").addEventListener("click",function(){this.classList.add("hidden");$("unconfAsk").classList.remove("hidden");$("unconfReason").focus();});
+$("unconfBtn").addEventListener("click",function(){
+  var i=cur.info,l=i&&i.records.length?i.records[i.records.length-1]:null;if(!l)return;
+  $("unconfMsg").innerHTML="通番 "+esc(i.serial)+" の棚卸確認を取り消しますか?<small>"+esc(l.order)+" カートン "+l.from+"〜"+l.to+"("+l.count+"箱) / 確認 "+esc(l.at)+" "+esc(l.by)+"<br>取り消しても記録は消えず、履歴に残ります。取り消した後は数え直して記録し直してください。</small>";
+  $("toast").classList.add("hidden");this.classList.add("hidden");$("unconfAsk").classList.remove("hidden");$("unconfAsk").scrollIntoView({behavior:"smooth",block:"center"});});
 $("unconfNo").addEventListener("click",function(){$("unconfAsk").classList.add("hidden");$("unconfBtn").classList.remove("hidden");});
 $("unconfYes").addEventListener("click",function(){
   var b=this,sn=serial();
   api({action:"unconfirm",serial:sn,reason:$("unconfReason").value},b,"取消中").then(function(j){
     if(!j.ok)throw new Error(j.error==="not_confirmed"?"この通番はすでに未確認です":j.error);
-    b.textContent="取り消す";b.disabled=false;$("confirmed").checked=false;$("saveStatus").textContent="通番 "+sn+" の棚卸確認を取り消しました。数え直して、もう一度記録してください。";$("saveStatus").className="status";cur.info=j.info;$("unconfReason").value="";justSaved=null;showInfo();check();
+    b.textContent="はい、取り消す";b.disabled=false;$("confirmed").checked=false;$("saveStatus").textContent="通番 "+sn+" の棚卸確認を取り消しました。数え直して、もう一度記録してください。";$("saveStatus").className="status";cur.info=j.info;$("unconfReason").value="";justSaved=null;showInfo();check();
     toast("通番 "+sn+" の棚卸確認を取り消しました","ok",j._sec.toFixed(1)+"秒 / 履歴に残っています");log("確認取消 "+sn);
-  }).catch(function(e){toast("取消に失敗しました","ng",e.message+"(タップで閉じる)");b.textContent="取り消す";b.disabled=false;});
+  }).catch(function(e){toast("取消に失敗しました","ng",e.message+"(タップで閉じる)");b.textContent="はい、取り消す";b.disabled=false;});
 });
 
 function showInfo(){
