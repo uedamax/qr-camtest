@@ -53,7 +53,7 @@ button.working{background:#5b6875;border-color:#5b6875;color:#fff}
 </head>
 <body>
 <h1>パレット確認一覧(引っ越し用・試作)</h1>
-<div class="ver">第1.2版 / 2026-11-15 / 手入力の表示</div>
+<div class="ver">第1.3版 / 2026-11-15 / 確認取消の表示</div>
 
 <div class="login hidden" id="login">
  <div>この端末はまだログインしていません。スマホでは <a href="pallet.html">パレット確認</a> で認証QRを読むと、この一覧も見られます。PCでは、管理者から受け取ったトークン(US-で始まる文字列)を貼り付けてください。</div>
@@ -125,12 +125,12 @@ function renderSerial(){
     if(q){var hay=(x.serial+" "+(x.r?x.r.order:"")+" "+x.s.map(function(s){return s.order;}).join(" ")).toUpperCase();
       if(/^\d{1,3}$/.test(q))return x.serial===q;return hay.indexOf(q)>=0;}
     return true;});
-  $("th").innerHTML="<tr><th>通番</th><th>状態</th><th>オーダー</th><th>カートン番号</th><th>箱数</th><th>読取番号</th><th>住友リスト</th><th>担当</th><th>日時</th><th>メモ</th></tr>";
+  $("th").innerHTML="<tr><th>通番</th><th>状態</th><th>オーダー</th><th>カートン番号</th><th>箱数</th><th>読取番号</th><th>住友リスト</th><th>確認・取消した人</th><th>日時</th><th>メモ</th></tr>";
   $("tb").innerHTML=rows.map(function(x){var r=x.r;
-    var tag=!r?'<span class="tag none">未記録</span>':(r.confirmed?'<span class="tag ok">☑ 確認済</span>':'<span class="tag ng">□ 未確認</span>')+(x.diff?' <span class="tag warn">差異</span>':'');
+    var tag=!r?'<span class="tag none">未記録</span>':(r.confirmed?'<span class="tag ok">☑ 確認済</span>':(r.kind==='取消'?'<span class="tag ng">□ 確認取消</span>':'<span class="tag ng">□ 未確認</span>'))+(x.diff?' <span class="tag warn">差異</span>':'');
     var sumi=x.s.length?x.s.map(function(s){return esc(s.order)+(s.from?" "+s.from+"〜"+s.to:"");}).join(", "):"";
     if(r&&r.sumiMatch)sumi=(sumi?sumi+" / ":"")+esc(r.sumiMatch);
-    return '<tr class="'+x.cls+'"><td>'+esc(x.serial)+'</td><td data-l="状態">'+tag+'</td><td data-l="オーダー">'+(r?esc(r.order):"")+'</td><td data-l="カートン番号">'+(r?r.from+"〜"+r.to:"")+'</td><td data-l="箱数">'+(r?r.count:"")+'</td><td data-l="読取番号">'+(r&&r.scanned?esc(r.scanned)+(r.scanSrc==="手入力"?"✎手入力":"")+" ("+esc(r.inRange)+")":"")+'</td><td data-l="住友">'+sumi+'</td><td data-l="担当">'+(r?esc(r.by):"")+'</td><td data-l="日時">'+(r?esc(r.at):"")+'</td><td class="memo" data-l="メモ">'+(r?esc(r.note):"")+'</td></tr>';
+    return '<tr class="'+x.cls+'"><td>'+esc(x.serial)+'</td><td data-l="状態">'+tag+'</td><td data-l="オーダー">'+(r?esc(r.order):"")+'</td><td data-l="カートン番号">'+(r?r.from+"〜"+r.to:"")+'</td><td data-l="箱数">'+(r?r.count:"")+'</td><td data-l="読取番号">'+(r&&r.scanned?esc(r.scanned)+(r.scanSrc==="手入力"?"✎手入力":"")+" ("+esc(r.inRange)+")":"")+'</td><td data-l="住友">'+sumi+'</td><td data-l="確認・取消した人">'+(r?esc(r.by):"")+'</td><td data-l="日時">'+(r?esc(r.at):"")+'</td><td class="memo" data-l="メモ">'+(r?esc(r.note):"")+'</td></tr>';
   }).join("")||'<tr><td colspan="10">該当なし</td></tr>';
 }
 

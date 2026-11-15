@@ -76,6 +76,13 @@ textarea{width:100%;min-height:48px;font-size:14px}
 details{margin-top:8px}
 pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px;font-size:11px;white-space:pre-wrap;max-height:30vh;overflow:auto;margin:0}
 .hidden{display:none!important}
+.statusLine{margin-top:8px;padding:8px;border-radius:6px;font-weight:bold;background:var(--bg);border-left:5px solid var(--line)}
+.statusLine.ok{background:var(--okbg);border-left-color:var(--ok)}
+.statusLine.ng{background:var(--ngbg);border-left-color:var(--ng)}
+.statusLine small{display:block;font-weight:normal;color:var(--sub)}
+button.danger{background:var(--ng);border-color:var(--ng);color:#fff}
+#unconfReason{width:100%;margin-top:6px;font-size:15px}
+#myRecs li.cancel{color:var(--ng)}
 .ocrnote{background:var(--warnbg);border-left:5px solid var(--warn);border-radius:6px;padding:3px 8px;font-size:13px;color:var(--fg);margin-bottom:4px}
 .confirm input:disabled+span{color:var(--sub);font-weight:normal}
 button{transition:transform .06s,filter .06s}
@@ -113,7 +120,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.3版 / 2026-11-15 / OCRはお助け(人が確定)・項目ごとの読み直し</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.4版 / 2026-11-15 / 確認者の表示・確認の取消(履歴つき)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="logout" class="hidden">ログアウト</button>
 </div>
@@ -152,7 +159,17 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <label class="confirm"><input type="checkbox" id="confirmed"> <span id="confirmText">オーダーと範囲を入れると確認できます</span></label>
  <div class="btns"><a class="lnk" href="list.html" target="_blank">確認一覧</a><button id="next">次のパレット</button><button id="save" class="primary" disabled>記録する(未確認・差異あり)</button></div>
  <div class="status" id="saveStatus"></div>
- <ul class="recs" id="myRecs"></ul>
+ <div id="histBox" class="hidden">
+  <div class="statusLine" id="histStatus"></div>
+  <div class="unconf hidden" id="unconfBox">
+   <div class="btns"><button id="unconfBtn">この通番の棚卸確認を取り消す</button></div>
+   <div id="unconfAsk" class="hidden">
+    <input id="unconfReason" placeholder="取消の理由(任意) 例: 数え直しが必要">
+    <div class="btns"><button id="unconfNo">やめる</button><button id="unconfYes" class="danger">取り消す</button></div>
+   </div>
+  </div>
+  <details><summary id="histSum">この通番の履歴</summary><ul class="recs" id="myRecs"></ul></details>
+ </div>
 </div>
 <div class="qrline" id="qrLine"></div>
 
@@ -186,8 +203,8 @@ function setStatus(t,c){var s=$("status");s.textContent=t;s.className="status "+
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
 
 /* ---------- 待ち時間の表示 ---------- */
-var LBL={whoami:"認証を確認中",candidates:"オーダー一覧を読込中",palletInfo:"通番の情報を確認中",saveRange:"記録中"};
-var DEF={whoami:3,candidates:4,palletInfo:3,saveRange:5,ocr:8};
+var LBL={whoami:"認証を確認中",candidates:"オーダー一覧を読込中",palletInfo:"通番の情報を確認中",saveRange:"記録中",unconfirm:"棚卸確認を取消中"};
+var DEF={whoami:3,candidates:4,palletInfo:3,saveRange:5,unconfirm:5,ocr:8};
 var tasks={},taskSeq=0,busyTimer=null;
 function expectSec(k){try{var v=+localStorage.getItem("pallet_wait_"+k);if(v>0)return v;}catch(e){}return DEF[k]||4;}
 function learn(k,sec){try{var o=expectSec(k);localStorage.setItem("pallet_wait_"+k,String(Math.round((o*0.6+sec*0.4)*10)/10));}catch(e){}}
@@ -286,13 +303,41 @@ $("ordManual").addEventListener("input",function(){if(this.value.replace(/\D/g,"
 function serial(){return $("serial").value.replace(/\D/g,"");}
 var infoSeq=0;
 function loadInfo(){
-  var s=serial();if(!s||!cur.order||!token){check();return;}
+  var s=serial();if(!s||!token){check();return;}
   var my=++infoSeq;$("sumiInfo").textContent="通番 "+s+" の情報を確認中…";
-  api({action:"palletInfo",serial:s,order:cur.order.order}).then(function(j){
+  api({action:"palletInfo",serial:s,order:cur.order?cur.order.order:""}).then(function(j){
     if(my!==infoSeq)return;if(!j.ok)throw new Error(j.error);cur.info=j;showInfo();check();
   }).catch(function(e){$("sumiInfo").textContent="情報の取得に失敗: "+e.message;toast("通番の情報を取得できませんでした","ng","タップで閉じます");});
 }
 function sumiFor(){if(!cur.info||!cur.order)return null;return cur.info.sumi.filter(function(x){return x.order===cur.order.order;})[0]||null;}
+/* ---------- この通番の状態と履歴(だれが・いつ) ---------- */
+function renderHistory(){
+  var i=cur.info;var box=$("histBox");
+  if(!i||!i.records.length){box.classList.add("hidden");$("myRecs").innerHTML="";return;}
+  box.classList.remove("hidden");
+  var last=i.records[i.records.length-1];
+  var st2=$("histStatus");
+  if(last.kind==="取消"){st2.className="statusLine ng";st2.innerHTML="□ 棚卸確認は取り消されています<small>"+esc(last.at)+" "+esc(last.by)+" / "+esc(last.note)+"</small>";}
+  else if(last.confirmed){st2.className="statusLine ok";st2.innerHTML="☑ 棚卸確認済み: "+esc(last.order)+" "+last.from+"〜"+last.to+"("+last.count+"箱)<small>確認 "+esc(last.at)+" "+esc(last.by)+"</small>";}
+  else{st2.className="statusLine ng";st2.innerHTML="□ 未確認の記録があります: "+esc(last.order)+" "+last.from+"〜"+last.to+"<small>"+esc(last.at)+" "+esc(last.by)+(last.note?" / "+esc(last.note):"")+"</small>";}
+  $("unconfBox").classList.toggle("hidden",!(last.confirmed&&last.kind!=="取消"));
+  $("unconfAsk").classList.add("hidden");$("unconfBtn").classList.remove("hidden");
+  $("histSum").textContent="この通番の履歴("+i.records.length+"件)";
+  $("myRecs").innerHTML=i.records.slice().reverse().map(function(r){
+    var what=r.kind==="取消"?"確認取消":(r.confirmed?"☑ 棚卸確認":"□ 記録(未確認)");
+    return '<li class="'+(r.kind==="取消"?"cancel":"")+'">'+esc(r.at)+" "+esc(r.by)+" : "+what+" "+esc(r.order)+" "+r.from+"〜"+r.to+(r.scanSrc==="手入力"?" [番号手入力]":"")+(r.note?" / "+esc(r.note):"")+"</li>";}).join("");
+}
+$("unconfBtn").addEventListener("click",function(){this.classList.add("hidden");$("unconfAsk").classList.remove("hidden");$("unconfReason").focus();});
+$("unconfNo").addEventListener("click",function(){$("unconfAsk").classList.add("hidden");$("unconfBtn").classList.remove("hidden");});
+$("unconfYes").addEventListener("click",function(){
+  var b=this,sn=serial();
+  api({action:"unconfirm",serial:sn,reason:$("unconfReason").value},b,"取消中").then(function(j){
+    if(!j.ok)throw new Error(j.error==="not_confirmed"?"この通番はすでに未確認です":j.error);
+    b.textContent="取り消す";b.disabled=false;$("confirmed").checked=false;$("saveStatus").textContent="通番 "+sn+" の棚卸確認を取り消しました。数え直して、もう一度記録してください。";$("saveStatus").className="status";cur.info=j.info;$("unconfReason").value="";justSaved=null;showInfo();check();
+    toast("通番 "+sn+" の棚卸確認を取り消しました","ok",j._sec.toFixed(1)+"秒 / 履歴に残っています");log("確認取消 "+sn);
+  }).catch(function(e){toast("取消に失敗しました","ng",e.message+"(タップで閉じる)");b.textContent="取り消す";b.disabled=false;});
+});
+
 function showInfo(){
   var i=cur.info;if(!i)return;
   var s=sumiFor();
@@ -300,7 +345,7 @@ function showInfo(){
   else if(i.sumi.length){$("sumiInfo").innerHTML='住友リスト: 通番 '+esc(i.serial)+' は <b>'+esc(i.sumi.map(function(x){return x.order+(x.from?" "+x.from+"〜"+x.to:"");}).join(", "))+'</b>(選んだオーダーと違います)';$("useSumi").classList.add("hidden");}
   else{$("sumiInfo").textContent="住友リスト: この通番の情報はまだありません";$("useSumi").classList.add("hidden");}
   $("otherRecs").innerHTML=i.orderRecords.length?i.orderRecords.map(function(r){return '<li>同じオーダーの記録: 通番 '+esc(r.serial)+' に '+r.from+'〜'+r.to+'('+esc(r.by)+')</li>';}).join(""):"";
-  $("myRecs").innerHTML=i.records.length?i.records.map(function(r){return '<li>この通番の記録: '+(r.confirmed?'☑ ':'□ ')+esc(r.at)+' '+(r.scanSrc==='手入力'?'[番号手入力] ':'')+esc(r.order)+' '+r.from+'〜'+r.to+' 範囲内 '+esc(r.inRange)+' / '+esc(r.sumiMatch)+'('+esc(r.by)+')</li>';}).join(""):"";
+  renderHistory();
 }
 $("useSumi").addEventListener("click",function(){var s=sumiFor();if(s){$("from").value=s.from;$("to").value=s.to;check();}});
 $("serial").addEventListener("change",function(){$("serialInfo").textContent="";loadInfo();});
@@ -365,7 +410,7 @@ $("save").addEventListener("click",function(){
 });
 $("next").addEventListener("click",function(){
   var s=+serial();if(s)$("serial").value=s+1;$("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;$("save").textContent="記録する(未確認・差異あり)";
-  cur={order:null,info:null};$("ordMeta").textContent="";$("sumiInfo").textContent="";$("otherRecs").innerHTML="";$("myRecs").innerHTML="";$("saveStatus").textContent="";
+  cur={order:null,info:null};$("ordMeta").textContent="";$("sumiInfo").textContent="";$("otherRecs").innerHTML="";$("myRecs").innerHTML="";$("histBox").classList.add("hidden");$("saveStatus").textContent="";
   $("ordSel").innerHTML='<option value="">(QRを読むと候補が出ます)</option>';$("ordManual").value="";$("useSumi").classList.add("hidden");
   justSaved=null;resetScan();clearMini();check();setStatus("次のパレットです。カートンラベルを枠に合わせてください。");
   toast("次のパレット: 通番 "+(serial()||"-"),"info");window.scrollTo({top:0,behavior:"smooth"});
