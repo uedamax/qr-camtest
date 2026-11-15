@@ -53,7 +53,7 @@ button.working{background:#5b6875;border-color:#5b6875;color:#fff}
 </head>
 <body>
 <h1>パレット確認一覧(引っ越し用・試作)</h1>
-<div class="ver">第1.1版 / 2026-11-15 / 読込中の表示</div>
+<div class="ver">第1.2版 / 2026-11-15 / 手入力の表示</div>
 
 <div class="login hidden" id="login">
  <div>この端末はまだログインしていません。スマホでは <a href="pallet.html">パレット確認</a> で認証QRを読むと、この一覧も見られます。PCでは、管理者から受け取ったトークン(US-で始まる文字列)を貼り付けてください。</div>
@@ -130,7 +130,7 @@ function renderSerial(){
     var tag=!r?'<span class="tag none">未記録</span>':(r.confirmed?'<span class="tag ok">☑ 確認済</span>':'<span class="tag ng">□ 未確認</span>')+(x.diff?' <span class="tag warn">差異</span>':'');
     var sumi=x.s.length?x.s.map(function(s){return esc(s.order)+(s.from?" "+s.from+"〜"+s.to:"");}).join(", "):"";
     if(r&&r.sumiMatch)sumi=(sumi?sumi+" / ":"")+esc(r.sumiMatch);
-    return '<tr class="'+x.cls+'"><td>'+esc(x.serial)+'</td><td data-l="状態">'+tag+'</td><td data-l="オーダー">'+(r?esc(r.order):"")+'</td><td data-l="カートン番号">'+(r?r.from+"〜"+r.to:"")+'</td><td data-l="箱数">'+(r?r.count:"")+'</td><td data-l="読取番号">'+(r&&r.scanned?esc(r.scanned)+" ("+esc(r.inRange)+")":"")+'</td><td data-l="住友">'+sumi+'</td><td data-l="担当">'+(r?esc(r.by):"")+'</td><td data-l="日時">'+(r?esc(r.at):"")+'</td><td class="memo" data-l="メモ">'+(r?esc(r.note):"")+'</td></tr>';
+    return '<tr class="'+x.cls+'"><td>'+esc(x.serial)+'</td><td data-l="状態">'+tag+'</td><td data-l="オーダー">'+(r?esc(r.order):"")+'</td><td data-l="カートン番号">'+(r?r.from+"〜"+r.to:"")+'</td><td data-l="箱数">'+(r?r.count:"")+'</td><td data-l="読取番号">'+(r&&r.scanned?esc(r.scanned)+(r.scanSrc==="手入力"?"✎手入力":"")+" ("+esc(r.inRange)+")":"")+'</td><td data-l="住友">'+sumi+'</td><td data-l="担当">'+(r?esc(r.by):"")+'</td><td data-l="日時">'+(r?esc(r.at):"")+'</td><td class="memo" data-l="メモ">'+(r?esc(r.note):"")+'</td></tr>';
   }).join("")||'<tr><td colspan="10">該当なし</td></tr>';
 }
 
