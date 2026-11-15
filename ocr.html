@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>カートンラベル読取試験</title>
+<meta name="theme-color" content="#14202b">
+<style>
+:root{--bg:#f4f6f8;--fg:#14202b;--sub:#5b6875;--line:#d5dbe1;--panel:#fff;--accent:#0b6bcb;--ok:#13804a;--ng:#c62828;--num:#d32f2f;--ord:#1565c0;--qr:#2e7d32}
+@media (prefers-color-scheme:dark){:root{--bg:#10171e;--fg:#e6ebf0;--sub:#93a1ae;--line:#2a3640;--panel:#17212a;--accent:#5aa9f0;--ok:#4cc38a;--ng:#ef6b6b;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"Hiragino Sans","Noto Sans JP",sans-serif;
+ padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
+h1{font-size:17px;margin:0}
+.ver{color:var(--sub);font-size:11px}
+.stage{position:relative;width:100%;background:#000;border-radius:8px;overflow:hidden;margin-top:6px}
+video{display:block;width:100%;height:auto}
+#ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.btns{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
+button{font:inherit;font-size:16px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);min-height:46px}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.status{font-size:13px;color:var(--sub);min-height:1.4em}
+.status.ng{color:var(--ng)}.status.ok{color:var(--ok)}
+.res{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px;min-width:0}
+.card h2{font-size:13px;margin:0 0 4px;color:var(--sub);font-weight:normal}
+.big{font-size:30px;font-weight:bold;letter-spacing:.04em;font-variant-numeric:tabular-nums}
+.big.fixed{color:var(--ok)}
+.card.num{border-top:4px solid var(--num)}.card.ord{border-top:4px solid var(--ord)}
+.card img{display:block;max-width:100%;margin-top:4px;background:#fff;border:1px solid var(--line)}
+.votes{font-size:12px;color:var(--sub);word-break:break-all}
+.qr{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--qr);border-radius:8px;padding:8px;margin-top:8px;font-size:13px;word-break:break-all}
+details{margin-top:10px}
+textarea{width:100%;font:inherit;font-size:14px;min-height:60px;border:1px solid var(--line);border-radius:6px;padding:6px;background:var(--panel);color:var(--fg)}
+pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px;font-size:11px;white-space:pre-wrap;max-height:30vh;overflow:auto;margin:0}
+</style>
+</head>
+<body>
+<h1>カートンラベル読取試験</h1>
+<div class="ver">第1.0版 / 2026-11-15 / zxing-wasm 3.1.6 + tesseract.js 5.1.1(数字のみ)</div>
+
+<div class="stage" id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas></div>
+<div class="btns">
+ <button id="start" class="primary">開始</button>
+ <button id="reset">次のラベル(リセット)</button>
+ <button id="stop">停止</button>
+</div>
+<div class="status" id="status">「開始」を押し、ラベルを白い枠に合わせてください(緑の四角にQRが入るように)。</div>
+
+<div class="res">
+ <div class="card num"><h2>カートン番号(1〜99)</h2><div class="big" id="numVal">-</div><div class="votes" id="numVotes"></div><img id="numImg" alt=""></div>
+ <div class="card ord"><h2>オーダー番号 下4桁</h2><div class="big" id="ordVal">-</div><div class="votes" id="ordVotes"></div><img id="ordImg" alt=""></div>
+</div>
+<div class="qr" id="qr">QR: -</div>
+
+<details>
+ <summary>候補の下4桁(任意)</summary>
+ <p class="status">入れておくと、候補と一致した値だけを採用します。カンマ・空白・改行区切りで入力します(例: 7664, 7563)。この端末の中だけに保存します。</p>
+ <textarea id="cand"></textarea>
+</details>
+<details>
+ <summary>記録</summary>
+ <pre id="log"></pre>
+</details>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id);};
+var video=$("video"),ov=$("ov"),octx=ov.getContext("2d");
+var full=document.createElement("canvas"),fctx=full.getContext("2d",{willReadFrequently:true});
+var small=document.createElement("canvas"),sctx=small.getContext("2d",{willReadFrequently:true});
+var stream=null,timer=null,busy=false,worker=null,workerReady=false;
+var lastQuad=null;
+
+/* ラベル上の位置(QRの一辺=1、QR左上が原点) */
+var LABEL={u0:-6.2,v0:-0.6,u1:1.5,v1:4.4};
+var BOX={num:{u0:-0.1,v0:2.4,u1:1.45,v1:3.6},ord:{u0:-0.9,v0:3.3,u1:0.5,v1:4.15}};
+var NEED=3;            /* 同じ値が何回出たら確定するか */
+var PX=110;            /* 切り出し時の、QRの一辺あたりの画素数 */
+
+var state;
+function resetState(){state={qr:null,votes:{num:{},ord:{}},fixed:{num:null,ord:null},frames:0};render();}
+
+function log(m){var p=$("log");var t=new Date().toLocaleTimeString("ja-JP",{hour12:false});p.textContent=t+" "+m+"\n"+p.textContent.slice(0,4000);}
+function setStatus(t,c){var s=$("status");s.textContent=t;s.className="status "+(c||"");}
+function cands(){var t=$("cand").value.match(/\d{4}/g);return t||[];}
+try{$("cand").value=localStorage.getItem("ocrtest_cand")||"";}catch(e){}
+$("cand").addEventListener("input",function(){try{localStorage.setItem("ocrtest_cand",$("cand").value);}catch(e){}});
+
+function top(v){var a=Object.keys(v).map(function(k){return [k,v[k]];}).sort(function(a,b){return b[1]-a[1];});return a;}
+function render(){
+  ["num","ord"].forEach(function(k){
+    var t=top(state.votes[k]);var el=$(k+"Val");
+    if(state.fixed[k]){el.textContent=state.fixed[k];el.className="big fixed";}
+    else{el.textContent=t.length?t[0][0]+"?":"-";el.className="big";}
+    $(k+"Votes").textContent=t.length?"票: "+t.map(function(x){return x[0]+"×"+x[1];}).join(" "):"";
+  });
+  if(state.fixed.num&&state.fixed.ord)setStatus("確定しました。次のラベルは「次のラベル(リセット)」を押してください。","ok");
+}
+
+/* QR中身の分解(カートンラベルの書式) */
+function parseQR(t){
+  t=String(t).trim().replace(/'+$/,"");
+  var f=t.split(",");if(f.length<6)return null;
+  var tail=f.slice(5).join(",");var lots=[],m,re=/(\d{6}-\d{4}):(\d+?)(?=\d{6}-\d{4}:|TOTAL:)/g;
+  while((m=re.exec(tail)))lots.push(m[1]+"="+m[2]);
+  var tot=(tail.match(/TOTAL:(\d+)/)||[])[1];
+  return {id:f[0],dt:f[1],x3:f[2],pn:f[3],name:f[4],lots:lots,total:tot};
+}
+
+/* 画像の点 = TL + u*(TR-TL) + v*(BL-TL) で切り出す */
+function crop(q,b){
+  var ax=q[1].x-q[0].x,ay=q[1].y-q[0].y,bx=q[3].x-q[0].x,by=q[3].y-q[0].y;
+  var w=Math.round((b.u1-b.u0)*PX),h=Math.round((b.v1-b.v0)*PX);
+  var c=document.createElement("canvas");c.width=w;c.height=h;var x=c.getContext("2d",{willReadFrequently:true});
+  x.fillStyle="#fff";x.fillRect(0,0,w,h);
+  /* 出力(X,Y) -> 画像 : [ax/PX bx/PX; ay/PX by/PX]・(X,Y) + (TL + u0*a + v0*b) の逆変換 */
+  var m11=ax/PX,m21=ay/PX,m12=bx/PX,m22=by/PX;
+  var tx=q[0].x+b.u0*ax+b.v0*bx,ty=q[0].y+b.u0*ay+b.v0*by;
+  var det=m11*m22-m12*m21;if(Math.abs(det)<1e-9)return null;
+  var i11=m22/det,i12=-m12/det,i21=-m21/det,i22=m11/det;
+  x.setTransform(i11,i21,i12,i22,-(i11*tx+i12*ty),-(i21*tx+i22*ty));
+  x.imageSmoothingQuality="high";x.drawImage(full,0,0);
+  x.setTransform(1,0,0,1,0,0);
+  /* グレー化 */
+  var d=x.getImageData(0,0,w,h),p=d.data;
+  for(var i=0;i<p.length;i+=4){var g=(p[i]*0.299+p[i+1]*0.587+p[i+2]*0.114)|0;p[i]=p[i+1]=p[i+2]=g;}
+  x.putImageData(d,0,0);
+  return c;
+}
+function otsu(c){
+  var x=c.getContext("2d",{willReadFrequently:true}),d=x.getImageData(0,0,c.width,c.height),p=d.data,h=new Array(256).fill(0),n=p.length/4;
+  for(var i=0;i<p.length;i+=4)h[p[i]]++;
+  var sum=0;for(i=0;i<256;i++)sum+=i*h[i];
+  var sB=0,wB=0,best=0,th=128;
+  for(i=0;i<256;i++){wB+=h[i];if(!wB)continue;var wF=n-wB;if(!wF)break;sB+=i*h[i];var mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;th=i;}}
+  var o=document.createElement("canvas");o.width=c.width;o.height=c.height;var ox=o.getContext("2d");var od=ox.createImageData(c.width,c.height);
+  for(i=0;i<p.length;i+=4){var v2=p[i]>th?255:0;od.data[i]=od.data[i+1]=od.data[i+2]=v2;od.data[i+3]=255;}
+  ox.putImageData(od,0,0);return o;
+}
+function pad(c){var o=document.createElement("canvas");o.width=c.width+40;o.height=c.height+40;var x=o.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,o.width,o.height);x.drawImage(c,20,20);return o;}
+
+/* オーダー番号: 下の行から順に、数字が5桁以上並ぶ行を探し、その下4桁を採る(上の行の TOTAL などを避ける) */
+function judgeOrd(text){
+  var lines=String(text).split(/\n/).map(function(l){return l.replace(/\D/g,"");}).filter(function(l){return l.length>=5;});
+  if(!lines.length)return null;
+  var cs=cands();
+  for(var i=lines.length-1;i>=0;i--){
+    var d=lines[i];
+    if(cs.length){for(var j=0;j<cs.length;j++)if(d.slice(-4)===cs[j])return cs[j];continue;}
+    return d.slice(-4);
+  }
+  return null;
+}
+function judge(k,raw){
+  if(k==="ord")return judgeOrd(raw);
+  raw=raw.replace(/\s/g,"");
+  if(k==="num"){var m=raw.match(/^\d{1,2}$/);if(!m)return null;var n=+m[0];return (n>=1&&n<=99)?String(n):null;}
+  return null;
+}
+function ocrOne(k,c){
+  var vars=[pad(c),pad(otsu(c))];
+  return worker.setParameters({tessedit_pageseg_mode:k==="ord"?"6":"7"}).then(function(){return worker.recognize(vars[0]);}).then(function(r1){
+    return worker.recognize(vars[1]).then(function(r2){return [r1.data.text,r2.data.text];});
+  }).then(function(raws){
+    raws.forEach(function(raw){var v=judge(k,raw);if(v){state.votes[k][v]=(state.votes[k][v]||0)+1;if(state.votes[k][v]>=NEED&&!state.fixed[k]){state.fixed[k]=v;log("確定 "+k+"="+v);}}});
+    return raws;
+  });
+}
+
+function prepWorker(){
+  setStatus("文字認識の準備中…(初回は約6MBを読み込みます)");
+  var t0=performance.now();
+  return Tesseract.createWorker("eng",1,{langPath:"https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int",gzip:true})
+  .then(function(w){worker=w;return w.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"});})
+  .then(function(){workerReady=true;var ms=Math.round(performance.now()-t0);log("文字認識 準備OK "+ms+"ms");setStatus("準備OK("+ms+"ms)。ラベルを白い枠に合わせてください。");});
+}
+
+/* 画面の重ね描き */
+function drawGuide(){
+  var W=video.clientWidth,H=video.clientHeight;if(!W||!H)return;
+  var dpr=window.devicePixelRatio||1;
+  if(ov.width!==W*dpr||ov.height!==H*dpr){ov.width=W*dpr;ov.height=H*dpr;}
+  octx.setTransform(dpr,0,0,dpr,0,0);octx.clearRect(0,0,W,H);
+  /* 固定のガイド: ラベルが幅の90%に入る大きさ */
+  var lw=LABEL.u1-LABEL.u0,lh=LABEL.v1-LABEL.v0;var s=Math.min(W*0.9/lw,H*0.9/lh);
+  var ox=(W-lw*s)/2-LABEL.u0*s,oy=(H-lh*s)/2-LABEL.v0*s;
+  function r(b,col,dash){octx.setLineDash(dash||[]);octx.strokeStyle=col;octx.lineWidth=2;octx.strokeRect(ox+b.u0*s,oy+b.v0*s,(b.u1-b.u0)*s,(b.v1-b.v0)*s);}
+  r(LABEL,"rgba(255,255,255,.9)");r({u0:0,v0:0,u1:1,v1:1},"rgba(76,195,138,.95)");
+  r(BOX.num,"rgba(239,83,80,.8)",[6,4]);r(BOX.ord,"rgba(66,165,245,.8)",[6,4]);
+  octx.setLineDash([]);
+  /* 検出したQRと読み取り範囲 */
+  if(lastQuad&&video.videoWidth){
+    var k=W/video.videoWidth;
+    var q=lastQuad;function P(u,v){return [(q[0].x+u*(q[1].x-q[0].x)+v*(q[3].x-q[0].x))*k,(q[0].y+u*(q[1].y-q[0].y)+v*(q[3].y-q[0].y))*k];}
+    function poly(b,col){var a=[P(b.u0,b.v0),P(b.u1,b.v0),P(b.u1,b.v1),P(b.u0,b.v1)];octx.beginPath();octx.moveTo(a[0][0],a[0][1]);for(var i=1;i<4;i++)octx.lineTo(a[i][0],a[i][1]);octx.closePath();octx.strokeStyle=col;octx.lineWidth=3;octx.stroke();}
+    poly({u0:0,v0:0,u1:1,v1:1},"#4cc38a");poly(BOX.num,"#ef5350");poly(BOX.ord,"#42a5f5");
+  }
+}
+
+function tick(){
+  drawGuide();
+  if(busy||!stream||video.readyState<2||!window.ZXingWASM||!workerReady)return;
+  if(state.fixed.num&&state.fixed.ord)return;
+  var vw=video.videoWidth,vh=video.videoHeight;if(!vw)return;
+  full.width=vw;full.height=vh;fctx.drawImage(video,0,0,vw,vh);
+  var sc=Math.min(1,1280/Math.max(vw,vh));small.width=Math.round(vw*sc);small.height=Math.round(vh*sc);
+  sctx.drawImage(full,0,0,small.width,small.height);
+  busy=true;var t0=performance.now();
+  ZXingWASM.readBarcodes(sctx.getImageData(0,0,small.width,small.height),{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1})
+  .then(function(res){
+    if(!res||!res.length||!res[0].isValid){lastQuad=null;busy=false;return;}
+    var p=res[0].position;var q=[p.topLeft,p.topRight,p.bottomRight,p.bottomLeft].map(function(o){return {x:o.x/sc,y:o.y/sc};});
+    lastQuad=q;var side=Math.hypot(q[1].x-q[0].x,q[1].y-q[0].y);
+    var txt=res[0].text;
+    if(state.qr!==txt){ if(state.qr)log("別のQRを検出したのでリセット");resetState();state.qr=txt;
+      var pq=parseQR(txt);$("qr").textContent=pq?("QR: 品番 "+pq.pn+" / "+pq.name+" / 1番目 "+pq.id+" / TOTAL "+pq.total+" / ロット "+pq.lots.join(" ")):("QR(書式外): "+txt);}
+    var tq=performance.now();
+    var jobs=[];var cn=crop(q,BOX.num),co=crop(q,BOX.ord);
+    if(cn)$("numImg").src=cn.toDataURL();if(co)$("ordImg").src=co.toDataURL();
+    var p1=(!state.fixed.num&&cn)?ocrOne("num",cn):Promise.resolve(null);
+    return p1.then(function(rn){var p2=(!state.fixed.ord&&co)?ocrOne("ord",co):Promise.resolve(null);return p2.then(function(ro){return [rn,ro];});})
+    .then(function(r){state.frames++;render();
+      if(!(state.fixed.num&&state.fixed.ord))setStatus("読取中… QR一辺 "+Math.round(side)+"px / QR "+Math.round(tq-t0)+"ms・文字 "+Math.round(performance.now()-tq)+"ms"+(side<120?"  ※もう少し近づけてください":""),side<120?"ng":"");
+      log("QR辺="+Math.round(side)+"px 番号raw="+JSON.stringify(r[0])+" 下4桁raw="+JSON.stringify(r[1]));
+      busy=false;});
+  }).catch(function(e){busy=false;setStatus("エラー: "+(e&&e.message||e),"ng");log("エラー "+(e&&e.message||e));});
+}
+
+function start(){
+  if(stream)return;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus("カメラが使えません(HTTPSで開いているか確認してください)。","ng");return;}
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false})
+  .then(function(s){stream=s;video.srcObject=s;video.play();log("カメラ開始 "+(s.getVideoTracks()[0].getSettings().width||"?")+"x"+(s.getVideoTracks()[0].getSettings().height||"?"));
+    if(!worker)prepWorker().catch(function(e){setStatus("文字認識の準備に失敗: "+e,"ng");log("tesseract失敗 "+e);});
+    timer=setInterval(tick,200);})
+  .catch(function(e){setStatus("カメラを開始できません: "+e.name,"ng");});
+}
+function stop(){if(timer){clearInterval(timer);timer=null;}if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}lastQuad=null;drawGuide();setStatus("停止中。");}
+$("start").addEventListener("click",start);
+$("stop").addEventListener("click",stop);
+$("reset").addEventListener("click",function(){resetState();$("qr").textContent="QR: -";$("numImg").removeAttribute("src");$("ordImg").removeAttribute("src");setStatus("リセットしました。次のラベルを枠に合わせてください。");});
+document.addEventListener("visibilitychange",function(){if(document.hidden)stop();});
+window.addEventListener("resize",drawGuide);
+resetState();
+})();
+</script>
+</body>
+</html>
