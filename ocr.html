@@ -13,8 +13,17 @@ body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 -apple-system,"
  padding:max(8px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(20px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left))}
 h1{font-size:17px;margin:0}
 .ver{color:var(--sub);font-size:11px}
-.stage{position:relative;width:100%;background:#000;border-radius:8px;overflow:hidden;margin-top:6px}
-video{display:block;width:100%;height:auto}
+.stage{position:relative;width:100%;height:min(62vh,640px);background:#000;border-radius:8px;overflow:hidden;margin-top:6px}
+video{display:block;width:100%;height:100%;object-fit:cover}
+.hud{position:absolute;left:0;right:0;top:0;display:flex;gap:6px;padding:6px;pointer-events:none}
+.chip{flex:1;min-width:0;background:rgba(0,0,0,.62);color:#fff;border-radius:8px;padding:4px 8px;border-left:5px solid #999}
+.chip.num{border-left-color:#ef5350}.chip.ord{border-left-color:#42a5f5}
+.chip .lb{font-size:11px;opacity:.85}
+.chip .v{font-size:30px;font-weight:bold;line-height:1.1;font-variant-numeric:tabular-nums}
+.chip.fixed{background:rgba(19,128,74,.85)}
+.hudmsg{position:absolute;left:6px;right:6px;bottom:6px;background:rgba(0,0,0,.62);color:#fff;border-radius:8px;padding:4px 8px;font-size:12px;display:flex;gap:6px;align-items:center;pointer-events:none}
+.hudmsg img{height:34px;background:#fff;border-radius:3px}
+.hudmsg span{flex:1;min-width:0}
 #ov{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 .btns{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0}
 button{font:inherit;font-size:16px;padding:10px 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);min-height:46px}
@@ -37,9 +46,15 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 </head>
 <body>
 <h1>カートンラベル読取試験</h1>
-<div class="ver">第1.0版 / 2026-11-15 / zxing-wasm 3.1.6 + tesseract.js 5.1.1(数字のみ)</div>
+<div class="ver">第1.1版 / 2026-11-15 / zxing-wasm 3.1.6 + tesseract.js 5.1.1(数字のみ)</div>
 
-<div class="stage" id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas></div>
+<div class="stage" id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas>
+ <div class="hud">
+  <div class="chip num" id="numChip"><div class="lb">カートン番号</div><div class="v" id="numHud">-</div></div>
+  <div class="chip ord" id="ordChip"><div class="lb">オーダー下4桁</div><div class="v" id="ordHud">-</div></div>
+ </div>
+ <div class="hudmsg"><img id="numMini" alt=""><img id="ordMini" alt=""><span id="hudMsg">「開始」を押してください。</span></div>
+</div>
 <div class="btns">
  <button id="start" class="primary">開始</button>
  <button id="reset">次のラベル(リセット)</button>
@@ -85,7 +100,7 @@ var state;
 function resetState(){state={qr:null,votes:{num:{},ord:{}},fixed:{num:null,ord:null},frames:0};render();}
 
 function log(m){var p=$("log");var t=new Date().toLocaleTimeString("ja-JP",{hour12:false});p.textContent=t+" "+m+"\n"+p.textContent.slice(0,4000);}
-function setStatus(t,c){var s=$("status");s.textContent=t;s.className="status "+(c||"");}
+function setStatus(t,c){var s=$("status");s.textContent=t;s.className="status "+(c||"");var h=$("hudMsg");if(h)h.textContent=t;}
 function cands(){var t=$("cand").value.match(/\d{4}/g);return t||[];}
 try{$("cand").value=localStorage.getItem("ocrtest_cand")||"";}catch(e){}
 $("cand").addEventListener("input",function(){try{localStorage.setItem("ocrtest_cand",$("cand").value);}catch(e){}});
@@ -97,6 +112,7 @@ function render(){
     if(state.fixed[k]){el.textContent=state.fixed[k];el.className="big fixed";}
     else{el.textContent=t.length?t[0][0]+"?":"-";el.className="big";}
     $(k+"Votes").textContent=t.length?"票: "+t.map(function(x){return x[0]+"×"+x[1];}).join(" "):"";
+    $(k+"Hud").textContent=el.textContent;$(k+"Chip").className="chip "+k+(state.fixed[k]?" fixed":"");
   });
   if(state.fixed.num&&state.fixed.ord)setStatus("確定しました。次のラベルは「次のラベル(リセット)」を押してください。","ok");
 }
@@ -185,17 +201,18 @@ function drawGuide(){
   var dpr=window.devicePixelRatio||1;
   if(ov.width!==W*dpr||ov.height!==H*dpr){ov.width=W*dpr;ov.height=H*dpr;}
   octx.setTransform(dpr,0,0,dpr,0,0);octx.clearRect(0,0,W,H);
-  /* 固定のガイド: ラベルが幅の90%に入る大きさ */
-  var lw=LABEL.u1-LABEL.u0,lh=LABEL.v1-LABEL.v0;var s=Math.min(W*0.9/lw,H*0.9/lh);
-  var ox=(W-lw*s)/2-LABEL.u0*s,oy=(H-lh*s)/2-LABEL.v0*s;
+  /* 固定のガイド: ラベルが幅の90%に入る大きさ(上下の表示を避けて中央に置く) */
+  var lw=LABEL.u1-LABEL.u0,lh=LABEL.v1-LABEL.v0;var top0=70,bot0=56;var s=Math.min(W*0.9/lw,(H-top0-bot0)*0.95/lh);
+  var ox=(W-lw*s)/2-LABEL.u0*s,oy=top0+((H-top0-bot0)-lh*s)/2-LABEL.v0*s;
   function r(b,col,dash){octx.setLineDash(dash||[]);octx.strokeStyle=col;octx.lineWidth=2;octx.strokeRect(ox+b.u0*s,oy+b.v0*s,(b.u1-b.u0)*s,(b.v1-b.v0)*s);}
   r(LABEL,"rgba(255,255,255,.9)");r({u0:0,v0:0,u1:1,v1:1},"rgba(76,195,138,.95)");
   r(BOX.num,"rgba(239,83,80,.8)",[6,4]);r(BOX.ord,"rgba(66,165,245,.8)",[6,4]);
   octx.setLineDash([]);
   /* 検出したQRと読み取り範囲 */
   if(lastQuad&&video.videoWidth){
-    var k=W/video.videoWidth;
-    var q=lastQuad;function P(u,v){return [(q[0].x+u*(q[1].x-q[0].x)+v*(q[3].x-q[0].x))*k,(q[0].y+u*(q[1].y-q[0].y)+v*(q[3].y-q[0].y))*k];}
+    /* object-fit:cover の表示倍率とずれ */
+    var k=Math.max(W/video.videoWidth,H/video.videoHeight),dx=(W-video.videoWidth*k)/2,dy=(H-video.videoHeight*k)/2;
+    var q=lastQuad;function P(u,v){return [(q[0].x+u*(q[1].x-q[0].x)+v*(q[3].x-q[0].x))*k+dx,(q[0].y+u*(q[1].y-q[0].y)+v*(q[3].y-q[0].y))*k+dy];}
     function poly(b,col){var a=[P(b.u0,b.v0),P(b.u1,b.v0),P(b.u1,b.v1),P(b.u0,b.v1)];octx.beginPath();octx.moveTo(a[0][0],a[0][1]);for(var i=1;i<4;i++)octx.lineTo(a[i][0],a[i][1]);octx.closePath();octx.strokeStyle=col;octx.lineWidth=3;octx.stroke();}
     poly({u0:0,v0:0,u1:1,v1:1},"#4cc38a");poly(BOX.num,"#ef5350");poly(BOX.ord,"#42a5f5");
   }
@@ -220,7 +237,7 @@ function tick(){
       var pq=parseQR(txt);$("qr").textContent=pq?("QR: 品番 "+pq.pn+" / "+pq.name+" / 1番目 "+pq.id+" / TOTAL "+pq.total+" / ロット "+pq.lots.join(" ")):("QR(書式外): "+txt);}
     var tq=performance.now();
     var jobs=[];var cn=crop(q,BOX.num),co=crop(q,BOX.ord);
-    if(cn)$("numImg").src=cn.toDataURL();if(co)$("ordImg").src=co.toDataURL();
+    if(cn){$("numImg").src=$("numMini").src=cn.toDataURL();}if(co){$("ordImg").src=$("ordMini").src=co.toDataURL();}
     var p1=(!state.fixed.num&&cn)?ocrOne("num",cn):Promise.resolve(null);
     return p1.then(function(rn){var p2=(!state.fixed.ord&&co)?ocrOne("ord",co):Promise.resolve(null);return p2.then(function(ro){return [rn,ro];});})
     .then(function(r){state.frames++;render();
@@ -242,7 +259,7 @@ function start(){
 function stop(){if(timer){clearInterval(timer);timer=null;}if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}lastQuad=null;drawGuide();setStatus("停止中。");}
 $("start").addEventListener("click",start);
 $("stop").addEventListener("click",stop);
-$("reset").addEventListener("click",function(){resetState();$("qr").textContent="QR: -";$("numImg").removeAttribute("src");$("ordImg").removeAttribute("src");setStatus("リセットしました。次のラベルを枠に合わせてください。");});
+$("reset").addEventListener("click",function(){resetState();$("qr").textContent="QR: -";["numImg","ordImg","numMini","ordMini"].forEach(function(i){$(i).removeAttribute("src");});setStatus("リセットしました。次のラベルを枠に合わせてください。");});
 document.addEventListener("visibilitychange",function(){if(document.hidden)stop();});
 window.addEventListener("resize",drawGuide);
 resetState();
