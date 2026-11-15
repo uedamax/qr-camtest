@@ -31,6 +31,11 @@ tr.ok td:first-child{border-left:5px solid var(--ok)}tr.ng td:first-child{border
 .login{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px;margin:8px 0}
 .login input{width:100%;margin:6px 0}
 .hidden{display:none!important}
+button:active:not(:disabled){transform:scale(.95);filter:brightness(.88)}
+button.working{background:#5b6875;border-color:#5b6875;color:#fff}
+.spin{display:inline-block;width:1em;height:1em;border:3px solid rgba(255,255,255,.35);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite;vertical-align:-.15em;margin-right:6px}
+@keyframes sp{to{transform:rotate(360deg)}}
+.status.ok{color:var(--ok);font-weight:bold}
 /* スマホ: 表をカードにする */
 @media (max-width:640px){
  .wrap{background:none;border:none}
@@ -48,7 +53,7 @@ tr.ok td:first-child{border-left:5px solid var(--ok)}tr.ng td:first-child{border
 </head>
 <body>
 <h1>パレット確認一覧(引っ越し用・試作)</h1>
-<div class="ver">第1.0版 / 2026-11-15</div>
+<div class="ver">第1.1版 / 2026-11-15 / 読込中の表示</div>
 
 <div class="login hidden" id="login">
  <div>この端末はまだログインしていません。スマホでは <a href="pallet.html">パレット確認</a> で認証QRを読むと、この一覧も見られます。PCでは、管理者から受け取ったトークン(US-で始まる文字列)を貼り付けてください。</div>
@@ -85,12 +90,15 @@ function api(body){body.token=token;return fetch(API,{method:"POST",redirect:"fo
 try{var pf=JSON.parse(localStorage.getItem(PREF_KEY)||"{}");if(pf.filter)$("filter").value=pf.filter;if(pf.max)$("maxSerial").value=pf.max;if(pf.tab)tab=pf.tab;}catch(e){}
 function savePref(){try{localStorage.setItem(PREF_KEY,JSON.stringify({filter:$("filter").value,max:$("maxSerial").value,tab:tab}));}catch(e){}}
 
+var loadTimer=null;
 function load(){
-  setStatus("読込中…");
-  api({action:"list"}).then(function(j){
+  var b=$("reload"),t0=performance.now();b.disabled=true;b.classList.add("working");
+  var tick=function(){var s=((performance.now()-t0)/1000).toFixed(1);b.innerHTML='<span class="spin"></span>読込中 '+s+'秒';setStatus("読込中… "+s+"秒(目安 3〜5秒)");};tick();loadTimer=setInterval(tick,100);
+  var done=function(){clearInterval(loadTimer);b.disabled=false;b.classList.remove("working");b.textContent="更新";return ((performance.now()-t0)/1000).toFixed(1);};
+  api({action:"list"}).then(function(j){var sec=done();
     if(!j.ok){if(j.error==="unauthorized"){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;$("login").classList.remove("hidden");}throw new Error(j.error);}
-    data=j;$("login").classList.add("hidden");setStatus("更新 "+j.at+"(記録 "+j.records.length+"件)");render();
-  }).catch(function(e){setStatus("読込に失敗: "+e.message,"ng");});
+    data=j;$("login").classList.add("hidden");setStatus("✓ 更新しました "+j.at+"(記録 "+j.records.length+"件 / "+sec+"秒)","ok");render();
+  }).catch(function(e){done();setStatus("読込に失敗: "+e.message+"(「更新」をもう一度押してください)","ng");});
 }
 
 /* ---------- 通番別 ---------- */
