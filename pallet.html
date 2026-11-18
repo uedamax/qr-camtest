@@ -174,12 +174,12 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.16版 / 2026-11-18 / パレットラベルのQRか「確認して終了」で、このパレットの確認を終える</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.17版 / 2026-11-18 / 読めないときは通番の手入力と「決定」で進める</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
 </div>
-<div class="serial"><label for="serial">通番</label><input id="serial" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="自動"><span class="meta" id="serialInfo"></span></div>
+<div class="serial"><label for="serial">通番</label><input id="serial" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="自動"><button type="button" id="serialGo">決定</button><span class="meta" id="serialInfo"></span></div>
 
 <div class="stage qrng" id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas>
  <div class="hud">
@@ -330,7 +330,12 @@ var SPK=[
   [/^手書きラベルです/,"てがきの ラベルです。つうばんを いれて、かくにんして しゅうりょう、を おしてください。"],
   [/^ラベル通番 \d+ ≠/,"パレットラベルの つうばんが、ちがいます。"],
   [/^通番 \d+ をセット/,"つうばんを よみました。カートンラベルを、カメラで さつえい してください。"],
-  [/^通番 \d+ の確認を終了/,"かくにんを、しゅうりょう しました。"]
+  [/^通番 \d+ の確認を終了/,"かくにんを、しゅうりょう しました。"],
+  [/^通番 \d+ を手入力/,"つうばんを、てにゅうりょく しました。カートンの かずを、かぞえてください。"],
+  [/^通番 \d+ は住友リストに/,"その つうばんは、すみともの リストに ありません。"],
+  [/^通番 \d+ のオーダーが一覧に/,"その つうばんの オーダーが、いちらんに ありません。"],
+  [/^通番を入れてから/,"つうばんを いれてから、けってい を おしてください。"],
+  [/^通番 \d+ の残り/,"この パレットには、まだ ほかの オーダーが あります。のこりの オーダーを えらんで、きろく してください。"]
 ];
 var WORDS=[[/QR/g,"キューアール"],[/本人用/g,"じぶんの"],[/認証/g,"にんしょう"],[/下4桁/g,"しも よんけた"],[/通番/g,"つうばん"],[/枠/g,"わく"],[/読取/g,"よみとり"],[/記録/g,"きろく"],[/棚卸/g,"たなおろし"],[/[「」()()]/g," "]];
 function speechText(t){
@@ -568,6 +573,7 @@ $("unconfYes").addEventListener("click",function(){
 function showInfo(){
   var i=cur.info;if(!i)return;
   var s=sumiFor();
+  if(s&&s.from&&s.to&&!$("from").value&&!$("to").value){$("from").value=s.from;$("to").value=s.to;} /* 第1.17版: 住友の範囲を自動で入れる */
   if(s&&s.from&&s.to){$("sumiInfo").innerHTML='住友リスト: 通番 '+esc(i.serial)+' は <b>'+esc(s.order)+' の '+s.from+'〜'+s.to+'</b>'+(s.note?' / '+esc(s.note):'');$("useSumi").classList.remove("hidden");}
   else if(i.sumi.length){$("sumiInfo").innerHTML='住友リスト: 通番 '+esc(i.serial)+' は <b>'+esc(i.sumi.map(function(x){return x.order+(x.from?" "+x.from+"〜"+x.to:"");}).join(", "))+'</b>(選んだオーダーと違います)';$("useSumi").classList.add("hidden");}
   else{$("sumiInfo").textContent="住友リスト: この通番の情報はまだありません";$("useSumi").classList.add("hidden");}
@@ -575,7 +581,26 @@ function showInfo(){
   renderHistory();
 }
 $("useSumi").addEventListener("click",function(){var s=sumiFor();if(s){$("from").value=s.from;$("to").value=s.to;check();}});
-$("serial").addEventListener("change",function(){$("serialInfo").textContent="";loadInfo();});
+$("serial").addEventListener("change",function(){$("serialInfo").textContent="";loadInfo();serialOnly();});
+/* 第1.17版: QR や文字認識で読めないときは、通番の手入力だけで進める。住友リストからその通番のオーダーと範囲を出す */
+function serialOnly(){
+  var s=serial();if(!s||!ORDERS||cur.order)return;
+  var sn=String(Number(s));var rows=SUMI.filter(function(r){return r.serial===sn;});
+  if(!rows.length){setStatus("通番 "+sn+" は住友リストにありません","ng");return;}
+  var os=ORDERS.filter(function(o){return rows.some(function(r){return r.order===o.order;});});
+  if(!os.length){setStatus("通番 "+sn+" のオーダーが一覧にありません","ng");return;}
+  $("ordSel").innerHTML='<option value="">通番 '+esc(sn)+' のオーダー '+os.length+'件 から選択</option>'+os.map(function(o){
+    var r=rows.filter(function(x){return x.order===o.order;})[0];
+    return '<option value="'+esc(o.order)+'">'+esc(o.order)+'  '+esc(o.item)+'  カートン '+r.from+'〜'+r.to+'</option>';}).join("");
+  if(os.length===1){
+    $("ordSel").value=os[0].order;selectOrder(os[0].order,"person");
+    var r=rows[0];if(r.from&&r.to&&!$("from").value&&!$("to").value){$("from").value=r.from;$("to").value=r.to;}
+    check();
+  }
+  $("serialInfo").textContent="(手入力)";
+  setStatus("通番 "+sn+" を手入力。カートン数を数える","ok");
+}
+$("serialGo").addEventListener("click",function(){if(!ORDERS){setStatus("先に本人用の認証QRを読んでください。","ng");return;}if(!serial()){setStatus("通番を入れてから「決定」","ng");return;}serialAuto=false;loadInfo();serialOnly();});
 
 /* ---------- 範囲の判定 ---------- */
 function check(){
@@ -656,6 +681,16 @@ function finishPallet(src){
   doSave(function(ok){
     finishing=false;
     if(!ok)return;
+    /* 第1.17版: 同じ通番に、まだ記録していないオーダーがあれば、次のパレットへ進まずに残りを選ばせる */
+    var sn2=String(Number(sn)),done={};
+    ((cur.info&&cur.info.records)||[]).forEach(function(r){if(r.kind!=="取消")done[r.order]=1;});
+    var rest=SUMI.filter(function(r){return r.serial===sn2&&!done[r.order];});
+    if(rest.length){
+      setStatus("通番 "+sn2+" の残り "+rest.length+" オーダーを選んで記録","warn");
+      $("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;justSaved=null;cur.order=null;
+      serialOnly();setStatus("通番 "+sn2+" の残り "+rest.length+" オーダーを選んで記録","warn");
+      $("ordSel").scrollIntoView({block:"center",behavior:"smooth"});return;
+    }
     setStatus("通番 "+sn+" の確認を終了しました","ok");
     setTimeout(goNext,2600);                          /* 音声の案内が重ならないよう間を空ける */
   });
