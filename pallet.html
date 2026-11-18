@@ -159,6 +159,9 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
 .confirm:has(input:checked){background:var(--ok);color:#fff;border-color:var(--ok)}
 .confirm:has(input:not(:disabled)) input{width:32px;height:32px;accent-color:#0b5d2e}
 /* 第1.16版: 「確認して終了」ボタン */
+/* 第1.18版: 今の作業で人が目で確かめる所を、赤い太い楕円で囲む */
+.ring{position:relative}
+.ring::after{content:"";position:absolute;inset:-8px -5px;border:5px solid #d32f2f;border-radius:50%;pointer-events:none;z-index:2}
 button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-weight:800;font-size:16px;padding:12px}
 .lnk{align-self:center;color:var(--accent)}
 </style>
@@ -174,7 +177,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.17版 / 2026-11-18 / 読めないときは通番の手入力と「決定」で進める</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.18版 / 2026-11-18 / 今の作業で確かめる所を赤い楕円で囲む</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -407,6 +410,7 @@ function api(body,btn,btnText){
 function setLogin(name){
   userName=name||"";$("who").textContent=name?("担当: "+name):"未ログイン(本人用の認証QRを読んでください)";
   $("logout").classList.toggle("hidden",!name);
+  if(typeof updateRings==="function")updateRings();
 }
 function tryToken(t){
   token=t;setStatus("認証を確認中…");
@@ -517,7 +521,7 @@ function runMatch(force){
   /* 第1.12版: パレットに載っているカートンの数を数えるよう促す(住友リストの範囲から箱数を出す) */
   var palN=0;if(hit.length===1)SUMI.forEach(function(r){if(r.serial===hit[0].serial&&r.from&&r.to)palN+=r.to-r.from+1;}); /* 同じ通番の全オーダーの合計 */
   h+='<span class="cnchk">カートン数を確認してください'+(palN?' '+palN+'箱':'')+'</span>';
-  h+='<span class="k">OrderNo</span><span class="v big">'+(o?esc(fullOrder(o)):'<span class="meta">未確定</span>')+'</span>'; /* 第1.14版: ラベルと同じく カートン番号 → OrderNo の順 */
+  h+='<span class="k">OrderNo</span><span class="v big ordno">'+(o?esc(fullOrder(o)):'<span class="meta">未確定</span>')+'</span>'; /* 第1.14版: ラベルと同じく カートン番号 → OrderNo の順 */
   h+='</div>';
   if(pq.lots.length)h+='<div class="mlots">LOT: '+pq.lots.map(function(x){var a=x.split("=");return esc(a[0])+" × "+Number(a[1]).toLocaleString();}).join(" / ")+' / TOTAL '+Number(pq.total||0).toLocaleString()+'</div>';
   if(cands.length>1||(cands.length&&hit.length!==1))h+='<div class="mpick">'+cands.map(function(r){return '<button type="button" data-s="'+esc(r.serial)+'">通番 '+esc(r.serial)+'<br><small>'+r.from+'〜'+r.to+'</small></button>';}).join("")+'</div>';
@@ -637,10 +641,24 @@ function check(){
   if(valid&&o&&!(t>o.cartons)){cb.disabled=false;$("confirmText").textContent="オーダー "+o.order+" のカートン "+f+"〜"+t+"("+(t-f+1)+"箱)を数え、確認した(棚卸確認☑)";}
   else{cb.disabled=true;cb.checked=false;$("confirmText").textContent="オーダーと範囲を入れると確認できます";}
   if(cb.checked)cb.dataset.key=key;
-  var sb=$("save");if(sb.classList.contains("working"))return;
-  if(justSaved){sb.disabled=true;sb.classList.add("done");sb.textContent="✓ 記録済み("+justSaved.sec.toFixed(1)+"秒)";return;}
+  var sb=$("save");if(sb.classList.contains("working")){updateRings();return;}
+  if(justSaved){sb.disabled=true;sb.classList.add("done");sb.textContent="✓ 記録済み("+justSaved.sec.toFixed(1)+"秒)";updateRings();return;}
   sb.classList.remove("done");sb.textContent=$("confirmed").checked?"棚卸確認済みとして記録":"記録する(未確認・差異あり)";
   sb.disabled=!(valid&&o&&serial()&&token&&!(t>o.cartons));
+  updateRings();
+}
+/* 第1.18版: 今の作業で人が確かめる所だけを赤い楕円で囲む。終わった所の丸は消す */
+function ring(el,on){if(el)el.classList.toggle("ring",!!on);}
+function updateRings(){
+  var cb=$("confirmed"),todo=!cb.disabled&&!cb.checked&&!justSaved,mb=$("matchBody");
+  var hit=mb.querySelector(".mserial:not(.ng)");
+  ring($("start"),!token&&$("start").textContent==="開始");
+  ring(hit,todo&&!!hit);
+  ring(mb.querySelector(".cnchk"),todo&&!!hit);
+  ring(mb.querySelector(".ordno"),todo&&!!hit);
+  ring(document.querySelector(".range"),todo&&!hit);       /* 手入力のときは範囲(箱の数)を確かめる */
+  ring(document.querySelector(".confirm"),todo);
+  ring($("finish"),cb.checked&&!justSaved);
 }
 ["from","to"].forEach(function(id){$(id).addEventListener("input",check);});
 $("confirmed").addEventListener("change",function(){this.dataset.key=this.checked?((cur.order?cur.order.order:"")+"|"+(+$("from").value)+"|"+(+$("to").value)):"";check();});
@@ -895,7 +913,8 @@ function tick(){
 function setStartBtn(mode){var b=$("start");b.classList.remove("running","working");
   if(mode==="wait"){b.disabled=true;b.classList.add("working");b.innerHTML='<span class="spin"></span>カメラ起動中';}
   else if(mode==="run"){b.disabled=true;b.classList.add("running");b.textContent="● 読取中";}
-  else{b.disabled=false;b.textContent="開始";}}
+  else{b.disabled=false;b.textContent="開始";}
+  if(typeof updateRings==="function")updateRings();}
 function start(){
   if(stream)return;setStartBtn("wait");
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){setStatus("カメラが使えません(HTTPSで開いているか確認してください)。","ng");return;}
