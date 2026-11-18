@@ -166,7 +166,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.9版 / 2026-11-18 / 案内を映像の下の1行に移す(第1.8版: 住友の移管リストに対応)</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.10版 / 2026-11-18 / 「写す」を「カメラで撮影」に(第1.9版: 案内を映像の下の1行に)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -259,7 +259,7 @@ var lastSaid={},lastSayAt=0;
 function blink(el){if(!el)return;el.classList.remove("blink");void el.offsetWidth;el.classList.add("blink");}
 /* 映像の下の1行に出す短い文(大きい文字のまま1行に入る長さ)。音声は元の文を読む */
 var SHORT=[
-  [/^「開始」を押して/,"「開始」を押し、認証QRを写す"],
+  [/^「開始」を押して/,"「開始」→認証QRをカメラで撮影"],
   [/^認証QRが無効/,"認証QRが無効です"],
   [/^通信エラー/,"通信エラー 電波を確認"],
   [/^準備OK/,"準備OK ラベルを枠に合わせる"],
@@ -276,7 +276,7 @@ var SHORT=[
   [/^QR読取済。文字を読んでいます/,"文字を読取中…"],
   [/^カメラが使えません/,"カメラ不可 HTTPSか確認"],
   [/^カートンラベルを白い枠/,"ラベルを白い枠に合わせる"],
-  [/^本人用の認証QRを写して/,"認証QRを写す"],
+  [/^本人用の認証QRを/,"認証QRをカメラで撮影してください"],
   [/^カメラを開始できません/,"カメラを開始できません"],
   [/^読み直します/,"読み直し ラベルを枠へ"]
 ];
@@ -296,7 +296,7 @@ function say(t,urgent){
 /* 読み上げ用の文。漢字のままだと読み違える(本人用・下4桁・枠 など)ので、案内ごとに かな の文を持たせる。
    読点(、)と空白で区切ると、声の抑揚が自然になる。 */
 var SPK=[
-  [/^「開始」を押して/,"かいし ボタンを おして、じぶんの、にんしょう キューアールを、うつしてください。"],
+  [/^「開始」を押して/,"かいし ボタンを おして、じぶんの、にんしょう キューアールを、カメラで さつえい してください。"],
   [/^認証QRが無効/,"にんしょうの キューアールが、むこうです。"],
   [/^通信エラー/,"つうしん エラーです。でんぱを、かくにんしてください。"],
   [/^準備OK/,"じゅんび、オーケーです。カートンラベルを、わくに、あわせてください。"],
@@ -310,7 +310,7 @@ var SPK=[
   [/^エラー/,"エラーが、おきました。"],
   [/^カメラが使えません/,"カメラが、つかえません。"],
   [/^カートンラベルを白い枠/,"カートンラベルを、しろい わくに、あわせてください。"],
-  [/^本人用の認証QRを写して/,"じぶんの、にんしょう キューアールを、うつしてください。"],
+  [/^本人用の認証QRを/,"じぶんの、にんしょう キューアールを、カメラで さつえい してください。"],
   [/^カメラを開始できません/,"カメラを、かいし できません。"],
   [/^停止中/,"ていし しました。"],
   [/^読み直します/,"よみなおします。ラベルを、わくに、あわせてください。"],
@@ -812,7 +812,7 @@ function start(){
   .then(function(s){stream=s;video.srcObject=s;video.play();setStartBtn("run");
     if(!worker){var bid=busyStart("ocr","文字認識の準備中(初回は約6MB)");prepWorker().then(function(){busyEnd(bid,true);},function(e){busyEnd(bid,false);log("tesseract失敗 "+e);toast("文字認識の準備に失敗","ng","画面を読み込み直してください");});}
     timer=setInterval(tick,200);
-    setStatus(token?"カートンラベルを白い枠に合わせてください。":"本人用の認証QRを写してください。");})
+    setStatus(token?"カートンラベルを白い枠に合わせてください。":"本人用の認証QRをカメラで撮影してください。");})
   .catch(function(e){setStartBtn("");setStatus("カメラを開始できません: "+e.name,"ng");toast("カメラを開始できません","ng",e.name+"(タップで閉じる)");});
 }
 function stop(){if(timer){clearInterval(timer);timer=null;}if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}lastQuad=null;drawGuide();setStartBtn("");setStatus("停止中。");}
@@ -824,7 +824,7 @@ window.addEventListener("resize",drawGuide);
 
 resetScan();check();
 var saved=null;try{saved=localStorage.getItem(TOKEN_KEY);}catch(e){}
-if(saved)tryToken(saved);else{setLogin("");setStatus("「開始」を押して、本人用の認証QRを写してください。");}
+if(saved)tryToken(saved);else{setLogin("");setStatus("「開始」を押して、本人用の認証QRをカメラで撮影してください。");}
 })();
 </script>
 </body>
