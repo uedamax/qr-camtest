@@ -172,7 +172,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.14版 / 2026-11-18 / 照合欄をラベルと同じ並び(カートン番号の次に OrderNo)に</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.15版 / 2026-11-18 / 差異メモを初めから開いておく</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -214,7 +214,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="range"><input id="from" inputmode="numeric" maxlength="2" placeholder="から"> 〜 <input id="to" inputmode="numeric" maxlength="2" placeholder="まで"> <span class="cnt" id="cnt"></span>
   <button id="useSumi" class="hidden">住友の範囲を入れる</button></div>
  <ul class="checks" id="checks"></ul>
- <details><summary>差異メモ(違いがあれば)</summary><textarea id="note" placeholder="例: 12番の箱が見当たらない / ラベル汚れ"></textarea></details>
+ <details open><summary>差異メモ(違いがあれば)</summary><textarea id="note" placeholder="例: 12番の箱が見当たらない / ラベル汚れ"></textarea></details>
  <label class="confirm"><input type="checkbox" id="confirmed"> <span id="confirmText">オーダーと範囲を入れると確認できます</span></label>
  <div class="btns"><a class="lnk" href="list.html" target="_blank">確認一覧</a><button id="next">次のパレット</button><button id="save" class="primary" disabled>記録する(未確認・差異あり)</button></div>
  <div class="status" id="saveStatus"></div>
