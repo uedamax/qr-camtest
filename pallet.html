@@ -50,9 +50,11 @@ video{display:block;width:100%;height:100%;object-fit:cover}
 .hudmsg img{height:30px;background:#fff;border-radius:3px}
 .hudmsg span{flex:1;min-width:0}
 /* 第1.8版: カメラの上の案内も大きく、黄色の帯に(読めた=緑、問題=赤) */
-.hudmsg{font-size:min(4.6vw,18px);font-weight:800;background:rgba(255,196,0,.94);color:#111;padding:6px 10px}
-.hudmsg.ok{background:rgba(19,128,74,.94);color:#fff}
-.hudmsg.ng{background:rgba(198,40,40,.94);color:#fff}
+.hudmsg{position:static;margin:4px 0 0;font-size:18px;font-weight:800;background:rgb(255,196,0);color:#111;padding:6px 10px;border-radius:8px}
+.hudmsg span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hudmsg img:not([src]){display:none}
+.hudmsg.ok{background:rgb(19,128,74);color:#fff}
+.hudmsg.ng{background:rgb(198,40,40);color:#fff}
 .btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;justify-content:flex-end}
 .btns .lnk{margin-right:auto}
 button{font:inherit;font-size:15px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);min-height:44px}
@@ -78,6 +80,7 @@ button:disabled{opacity:.45}
 #status.ok{background:var(--okbg);border-color:var(--ok)}
 #status.ng{background:var(--ngbg);border-color:var(--ng);color:var(--ng)}
 #status:empty{display:none}
+#status{display:none} /* 案内は映像の下の1行(.hudmsg)に出すので、同じ文の帯は出さない */
 @keyframes blink3{0%,100%{opacity:1}50%{opacity:.12}}
 .blink{animation:blink3 .45s ease-in-out 3}
 #voice.off{opacity:.55;text-decoration:line-through}
@@ -163,7 +166,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.8版 / 2026-11-18 / 住友の移管リスト(11/24〜27・319パレット)に対応</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.9版 / 2026-11-18 / 案内を映像の下の1行に移す(第1.8版: 住友の移管リストに対応)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -176,8 +179,9 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
   <div class="chip num" id="numChip"><div class="lb">カートン番号</div><div class="v" id="numHud">-</div></div>
   <div class="chip ord" id="ordChip"><div class="lb">オーダー下4桁</div><div class="v" id="ordHud">-</div></div>
  </div>
- <div class="hudmsg"><img id="numMini" alt=""><img id="ordMini" alt=""><span id="hudMsg">「開始」を押してください。</span></div>
 </div>
+<!-- 第1.8版: 案内は映像に重ねず、映像のすぐ下に1行で出す -->
+ <div class="hudmsg"><img id="numMini" alt=""><img id="ordMini" alt=""><span id="hudMsg">「開始」を押してください。</span></div>
 <div class="btns">
  <button id="stop">停止</button>
  <button id="rescan">全部読み直し</button>
@@ -253,6 +257,33 @@ function log(m){var p=$("log");var t=new Date().toLocaleTimeString("ja-JP",{hour
 var voiceOn=true;try{voiceOn=localStorage.getItem("pallet_voice")!=="off";}catch(e){}
 var lastSaid={},lastSayAt=0;
 function blink(el){if(!el)return;el.classList.remove("blink");void el.offsetWidth;el.classList.add("blink");}
+/* 映像の下の1行に出す短い文(大きい文字のまま1行に入る長さ)。音声は元の文を読む */
+var SHORT=[
+  [/^「開始」を押して/,"「開始」を押し、認証QRを写す"],
+  [/^認証QRが無効/,"認証QRが無効です"],
+  [/^通信エラー/,"通信エラー 電波を確認"],
+  [/^準備OK/,"準備OK ラベルを枠に合わせる"],
+  [/^オーダー一覧の読込に失敗/,"オーダー一覧を読めません"],
+  [/^次のパレット/,"次のパレット ラベルを枠へ"],
+  [/^カートン番号だけ読み直/,"カートン番号を読み直し"],
+  [/^オーダー下4桁だけ読み直/,"下4桁を読み直し"],
+  [/^QRが見えていません/,"QRが見えません 枠に合わせる"],
+  [/^QRを探しています/,"QRを探し中 緑の四角にQRを"],
+  [/^先に本人用の認証QR/,"先に認証QRを読む"],
+  [/^QR・カートン番号・下4桁を読みました/,"読取OK 範囲を入れ「記録する」"],
+  [/^QRを読みました。文字認識の準備中/,"文字認識の準備中(初回のみ)"],
+  [/^QR読取済。文字を読んでいます.*近づけ/,"文字を読取中 もっと近づける"],
+  [/^QR読取済。文字を読んでいます/,"文字を読取中…"],
+  [/^カメラが使えません/,"カメラ不可 HTTPSか確認"],
+  [/^カートンラベルを白い枠/,"ラベルを白い枠に合わせる"],
+  [/^本人用の認証QRを写して/,"認証QRを写す"],
+  [/^カメラを開始できません/,"カメラを開始できません"],
+  [/^読み直します/,"読み直し ラベルを枠へ"]
+];
+function shortText(t){for(var i=0;i<SHORT.length;i++)if(SHORT[i][0].test(t))return SHORT[i][1];return t;}
+/* 案内を1行に収める。入らなければ文字を小さくする(12px まで。それでも入らなければ末尾を … にする) */
+function fitLine(el){if(!el)return;el.style.fontSize="";var fs=18;el.style.fontSize=fs+"px";while(el.scrollWidth>el.clientWidth+1&&fs>12){fs-=1;el.style.fontSize=fs+"px";}}
+window.addEventListener("resize",function(){fitLine($("hudMsg"));});
 function isProgress(t){return /…|\d+ms|\d+px/.test(t);} /* 途中経過(毎コマ変わる表示)は点滅・音声の対象外 */
 function say(t,urgent){
   if(!voiceOn||!window.speechSynthesis||!t)return;
@@ -305,7 +336,7 @@ if(window.speechSynthesis)speechSynthesis.onvoiceschanged=function(){voiceCache=
 function setStatus(t,c){
   var s=$("status");var changed=s.textContent!==t;
   s.textContent=t;s.className="status "+(c||"");
-  $("hudMsg").textContent=t;$("hudMsg").parentNode.className="hudmsg "+(c||"");
+  $("hudMsg").textContent=shortText(t);$("hudMsg").title=t;$("hudMsg").parentNode.className="hudmsg "+(c||"");fitLine($("hudMsg"));
   if(changed&&t&&!isProgress(t)){
     blink(s);blink($("hudMsg").parentNode);
     if(/「開始」/.test(t))blink($("start"));
