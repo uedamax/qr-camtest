@@ -181,7 +181,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.22版 / 2026-11-18 / 接続先を Apps Script 第2.5版のデプロイに切り替え</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.23版 / 2026-11-18 / オーダーが決まっていないときはオーダーの選び欄を赤い丸で囲む</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -669,6 +669,7 @@ function updateRings(){
   var cb=$("confirmed"),todo=!cb.disabled&&!cb.checked&&!justSaved,mb=$("matchBody");
   var hit=mb.querySelector(".mserial:not(.ng)");
   ring($("start"),!token&&$("start").textContent==="開始");
+  ring(document.querySelector(".ordrow"),!!(st&&st.pq)&&!cur.order);   /* 第1.23版: カートンを読んだのにオーダーが決まっていないときは、オーダーの選び欄を囲む */
   ring(hit,todo&&!!hit);
   ring(mb.querySelector(".cnchk"),todo&&!!hit);
   ring(mb.querySelector(".ordno"),todo&&!!hit);
