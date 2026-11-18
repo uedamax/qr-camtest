@@ -167,7 +167,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.11版 / 2026-11-18 / カートン番号の下に「カートンの番号を確認してください」(赤)</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.12版 / 2026-11-18 / カートン番号の下に「カートン数を確認してください N箱」(赤)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -495,7 +495,9 @@ function runMatch(force){
   h+='<span class="k">OrderNo</span><span class="v big">'+(o?esc(fullOrder(o)):'<span class="meta">未確定</span>')+'</span>';
   var rng=(hit.length===1?"カートン番号は "+hit[0].from+"〜"+hit[0].to:"")+(o?(hit.length===1?" / ":"")+"全 "+o.cartons+"箱":"");
   h+='<span class="k">カートン番号</span><span class="v cno">'+(n!==null?'<span class="cn">'+n+(st.manual.num?" ✎":"")+'</span>':'<span class="meta">未読取</span>')+(rng?'<span class="meta cr">'+rng+'</span>':'')+'</span>';
-  h+='<span class="cnchk">カートンの番号を確認してください</span>'; /* 第1.11版 */
+  /* 第1.12版: パレットに載っているカートンの数を数えるよう促す(住友リストの範囲から箱数を出す) */
+  var palN=0;if(hit.length===1)SUMI.forEach(function(r){if(r.serial===hit[0].serial&&r.from&&r.to)palN+=r.to-r.from+1;}); /* 同じ通番の全オーダーの合計 */
+  h+='<span class="cnchk">カートン数を確認してください'+(palN?' '+palN+'箱':'')+'</span>';
   h+='</div>';
   if(pq.lots.length)h+='<div class="mlots">LOT: '+pq.lots.map(function(x){var a=x.split("=");return esc(a[0])+" × "+Number(a[1]).toLocaleString();}).join(" / ")+' / TOTAL '+Number(pq.total||0).toLocaleString()+'</div>';
   if(cands.length>1||(cands.length&&hit.length!==1))h+='<div class="mpick">'+cands.map(function(r){return '<button type="button" data-s="'+esc(r.serial)+'">通番 '+esc(r.serial)+'<br><small>'+r.from+'〜'+r.to+'</small></button>';}).join("")+'</div>';
