@@ -162,6 +162,10 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
 /* 第1.18版: 今の作業で人が目で確かめる所を、赤い太い楕円で囲む */
 .ring{position:relative}
 .ring::after{content:"";position:absolute;inset:-8px -5px;border:5px solid #d32f2f;border-radius:50%;pointer-events:none;z-index:2}
+/* 第1.20版: パレットラベルを読むボタンと、そのときのカメラの囲み */
+button.labelbtn{flex:1;background:#0b6b3a;border-color:#0b6b3a;color:#fff;font-weight:800;font-size:17px;padding:14px}
+.stage.ring::after{display:none}
+.stage.ring{box-shadow:0 0 0 6px #d32f2f}
 button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-weight:800;font-size:16px;padding:12px}
 .lnk{align-self:center;color:var(--accent)}
 </style>
@@ -177,7 +181,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.19版 / 2026-11-18 / カートン番号の範囲も赤い楕円で囲む</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.20版 / 2026-11-18 / 「パレットラベルを読む」ボタンを付ける</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -222,7 +226,8 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <details open><summary>差異メモ(違いがあれば)</summary><textarea id="note" placeholder="例: 12番の箱が見当たらない / ラベル汚れ"></textarea></details>
  <label class="confirm"><input type="checkbox" id="confirmed"> <span id="confirmText">オーダーと範囲を入れると確認できます</span></label>
  <div class="btns"><a class="lnk" href="list.html" target="_blank">確認一覧</a><button id="next">次のパレット</button><button id="save" class="primary" disabled>記録する(未確認・差異あり)</button></div>
- <div class="btns"><button id="finish" class="finishbtn">確認して終了(パレットラベルのQRでも可)</button></div>
+ <div class="btns"><button id="readLabel" class="labelbtn">パレットラベルを読む(QRを撮影して終了)</button></div>
+ <div class="btns"><button id="finish" class="finishbtn">確認して終了(ラベルが読めないとき)</button></div>
  <div class="status" id="saveStatus"></div>
  <div id="histBox" class="hidden">
   <div class="statusLine" id="histStatus"></div>
@@ -338,6 +343,7 @@ var SPK=[
   [/^通番 \d+ は住友リストに/,"その つうばんは、すみともの リストに ありません。"],
   [/^通番 \d+ のオーダーが一覧に/,"その つうばんの オーダーが、いちらんに ありません。"],
   [/^通番を入れてから/,"つうばんを いれてから、けってい を おしてください。"],
+  [/^パレットラベルのQRを白い枠/,"パレットラベルの キューアールを、しろい わくに あわせてください。"],
   [/^通番 \d+ の残り/,"この パレットには、まだ ほかの オーダーが あります。のこりの オーダーを えらんで、きろく してください。"]
 ];
 var WORDS=[[/QR/g,"キューアール"],[/本人用/g,"じぶんの"],[/認証/g,"にんしょう"],[/下4桁/g,"しも よんけた"],[/通番/g,"つうばん"],[/枠/g,"わく"],[/読取/g,"よみとり"],[/記録/g,"きろく"],[/棚卸/g,"たなおろし"],[/[「」()()]/g," "]];
@@ -658,8 +664,11 @@ function updateRings(){
   ring(mb.querySelector(".ordno"),todo&&!!hit);
   ring(document.querySelector(".range"),todo);             /* 第1.19版: このパレットに載っているカートン番号(範囲)は、いつも確かめる */
   ring(document.querySelector(".confirm"),todo);
-  ring($("finish"),cb.checked&&!justSaved);
+  ring($("readLabel"),cb.checked&&!justSaved&&!waitLabel);   /* 第1.20版: チェック後はパレットラベルを読むボタン */
+  ring($("finish"),false);
+  ring($("stage"),waitLabel);
 }
+var waitLabel=false;
 ["from","to"].forEach(function(id){$(id).addEventListener("input",check);});
 $("confirmed").addEventListener("change",function(){this.dataset.key=this.checked?((cur.order?cur.order.order:"")+"|"+(+$("from").value)+"|"+(+$("to").value)):"";check();});
 
@@ -715,6 +724,7 @@ function finishPallet(src){
 }
 /* パレットラベル(通番ラベル)のQR。MVP,01,通番,… / MVP,02,通番,… / 手書き用 MVPH,01,B番号 */
 function onPalletLabel(txt){
+  waitLabel=false;updateRings();
   var now=Date.now();if(txt===lastLabelQR&&now-lastLabelAt<5000)return;lastLabelQR=txt;lastLabelAt=now;
   var m=/^MVP,0[12],(\d{1,4}),/.exec(txt+",");
   if(!m){setStatus("手書きラベルです。通番を入れて「確認して終了」","ng");return;}
@@ -724,8 +734,17 @@ function onPalletLabel(txt){
   finishPallet("パレットラベル");
 }
 $("finish").addEventListener("click",function(){finishPallet("ボタン");});
+/* 第1.20版: 「パレットラベルを読む」= カメラの所へ戻り、パレットラベルのQRを待つ */
+$("readLabel").addEventListener("click",function(){
+  if(!token){setStatus("先に本人用の認証QRを読んでください。","ng");return;}
+  waitLabel=true;updateRings();
+  if($("start").textContent==="開始")$("start").click();
+  $("stage").scrollIntoView({block:"start",behavior:"smooth"});
+  setStatus("パレットラベルのQRを白い枠に合わせる","");
+});
 function goNext(){$("next").click();}
 $("next").addEventListener("click",function(){
+  waitLabel=false;
   $("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;$("save").textContent="記録する(未確認・差異あり)";
   cur={order:null,info:null};$("ordMeta").textContent="";$("sumiInfo").textContent="";$("otherRecs").innerHTML="";$("myRecs").innerHTML="";$("histBox").classList.add("hidden");$("saveStatus").textContent="";
   $("ordSel").innerHTML='<option value="">(QRを読むと候補が出ます)</option>';$("ordManual").value="";$("useSumi").classList.add("hidden");
@@ -922,7 +941,7 @@ function start(){
   .then(function(s){stream=s;video.srcObject=s;video.play();setStartBtn("run");
     if(!worker){var bid=busyStart("ocr","文字認識の準備中(初回は約6MB)");prepWorker().then(function(){busyEnd(bid,true);},function(e){busyEnd(bid,false);log("tesseract失敗 "+e);toast("文字認識の準備に失敗","ng","画面を読み込み直してください");});}
     timer=setInterval(tick,200);
-    setStatus(token?"カートンラベルを白い枠に合わせてください。":"本人用の認証QRをカメラで撮影してください。");})
+    setStatus(!token?"本人用の認証QRをカメラで撮影してください。":(waitLabel?"パレットラベルのQRを白い枠に合わせる":"カートンラベルを白い枠に合わせてください。"));})
   .catch(function(e){setStartBtn("");setStatus("カメラを開始できません: "+e.name,"ng");toast("カメラを開始できません","ng",e.name+"(タップで閉じる)");});
 }
 function stop(){if(timer){clearInterval(timer);timer=null;}if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}lastQuad=null;drawGuide();setStartBtn("");setStatus("停止中。");}
