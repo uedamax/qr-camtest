@@ -158,6 +158,8 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
 .confirm:has(input:not(:disabled)){background:#ff9800;color:#111;border-color:#e65100}
 .confirm:has(input:checked){background:var(--ok);color:#fff;border-color:var(--ok)}
 .confirm:has(input:not(:disabled)) input{width:32px;height:32px;accent-color:#0b5d2e}
+/* 第1.16版: 「確認して終了」ボタン */
+button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-weight:800;font-size:16px;padding:12px}
 .lnk{align-self:center;color:var(--accent)}
 </style>
 </head>
@@ -172,7 +174,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.15版 / 2026-11-18 / 差異メモを初めから開いておく</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.16版 / 2026-11-18 / パレットラベルのQRか「確認して終了」で、このパレットの確認を終える</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -217,6 +219,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <details open><summary>差異メモ(違いがあれば)</summary><textarea id="note" placeholder="例: 12番の箱が見当たらない / ラベル汚れ"></textarea></details>
  <label class="confirm"><input type="checkbox" id="confirmed"> <span id="confirmText">オーダーと範囲を入れると確認できます</span></label>
  <div class="btns"><a class="lnk" href="list.html" target="_blank">確認一覧</a><button id="next">次のパレット</button><button id="save" class="primary" disabled>記録する(未確認・差異あり)</button></div>
+ <div class="btns"><button id="finish" class="finishbtn">確認して終了(パレットラベルのQRでも可)</button></div>
  <div class="status" id="saveStatus"></div>
  <div id="histBox" class="hidden">
   <div class="statusLine" id="histStatus"></div>
@@ -284,7 +287,9 @@ var SHORT=[
   [/^カートンラベルを白い枠/,"ラベルを白い枠に合わせる"],
   [/^本人用の認証QRを/,"認証QRをカメラで撮影してください"],
   [/^カメラを開始できません/,"カメラを開始できません"],
-  [/^読み直します/,"読み直し ラベルを枠へ"]
+  [/^読み直します/,"読み直し ラベルを枠へ"],
+  [/^まだ終了できません/,"まだ終了できません 下を確認"],
+  [/^手書きラベルです/,"手書きラベル 通番を入れて終了"]
 ];
 function shortText(t){for(var i=0;i<SHORT.length;i++)if(SHORT[i][0].test(t))return SHORT[i][1];return t;}
 /* 案内を1行に収める。入らなければ文字を小さくする(12px まで。それでも入らなければ末尾を … にする) */
@@ -320,7 +325,12 @@ var SPK=[
   [/^カメラを開始できません/,"カメラを、かいし できません。"],
   [/^停止中/,"ていし しました。"],
   [/^読み直します/,"よみなおします。ラベルを、わくに、あわせてください。"],
-  [/^音声の案内をオン/,"おんせいの あんないを、オンに しました。"]
+  [/^音声の案内をオン/,"おんせいの あんないを、オンに しました。"],
+  [/^まだ終了できません/,"まだ、しゅうりょう できません。したの ひょうじを、かくにんしてください。"],
+  [/^手書きラベルです/,"てがきの ラベルです。つうばんを いれて、かくにんして しゅうりょう、を おしてください。"],
+  [/^ラベル通番 \d+ ≠/,"パレットラベルの つうばんが、ちがいます。"],
+  [/^通番 \d+ をセット/,"つうばんを よみました。カートンラベルを、カメラで さつえい してください。"],
+  [/^通番 \d+ の確認を終了/,"かくにんを、しゅうりょう しました。"]
 ];
 var WORDS=[[/QR/g,"キューアール"],[/本人用/g,"じぶんの"],[/認証/g,"にんしょう"],[/下4桁/g,"しも よんけた"],[/通番/g,"つうばん"],[/枠/g,"わく"],[/読取/g,"よみとり"],[/記録/g,"きろく"],[/棚卸/g,"たなおろし"],[/[「」()()]/g," "]];
 function speechText(t){
@@ -614,7 +624,9 @@ var justSaved=null;
 function unsave(){if(justSaved){justSaved=null;check();}}
 ["from","to","note","serial"].forEach(function(id){$(id).addEventListener("input",unsave);});
 ["confirmed","ordSel"].forEach(function(id){$(id).addEventListener("change",unsave);});
-$("save").addEventListener("click",function(){
+$("save").addEventListener("click",function(){doSave();});
+/* 第1.16版: 記録の処理を関数にし、パレットラベルの読み取り・「確認して終了」ボタンからも使う。onDone(成功したか) */
+function doSave(onDone){
   var b=$("save");$("saveStatus").textContent="記録中…";$("saveStatus").className="status";
   var sn=serial(),od=cur.order.order,fr=$("from").value,to=$("to").value;
   api({action:"saveRange",serial:sn,order:od,from:+fr,to:+to,scanned:st.fixed.num||"",scanSrc:st.fixed.num?(st.manual.num?"手入力":"OCR"):"未読取",confirmed:$("confirmed").checked,qrId:st.pq?st.pq.id:"",note:$("note").value},b,"記録中")
@@ -625,8 +637,41 @@ $("save").addEventListener("click",function(){
     toast(head,"ok","通番 "+sn+" / "+od+" "+fr+"〜"+to+" / "+j._sec.toFixed(1)+"秒");
     justSaved={sec:j._sec,confirmed:j.confirmed};
     cur.info=j.info;showInfo();check();log("記録 "+sn+" "+od+" "+fr+"-"+to);
-  }).catch(function(e){$("saveStatus").textContent="記録に失敗しました: "+e.message+"(もう一度押してください)";$("saveStatus").className="status ng";toast("記録に失敗しました","ng","記録されていません。もう一度押してください(タップで閉じる)");check();});
-});
+    if(onDone)onDone(true);
+  }).catch(function(e){$("saveStatus").textContent="記録に失敗しました: "+e.message+"(もう一度押してください)";$("saveStatus").className="status ng";toast("記録に失敗しました","ng","記録されていません。もう一度押してください(タップで閉じる)");check();if(onDone)onDone(false);});
+}
+
+/* ---------- 第1.16版: このパレットの確認を終える(パレットラベルのQR か「確認して終了」ボタン) ---------- */
+var finishing=false,lastLabelQR="",lastLabelAt=0;
+function finishPallet(src){
+  if(finishing)return;
+  if(justSaved){goNext();return;}                     /* 記録済みなら次のパレットへ進むだけ */
+  var cb=$("confirmed");
+  if(!cb.disabled&&!cb.checked){cb.checked=true;cb.dataset.key=(cur.order?cur.order.order:"")+"|"+(+$("from").value)+"|"+(+$("to").value);check();}
+  if($("save").disabled){
+    var ng=[].slice.call(document.querySelectorAll("#checks li.ng")).map(function(li){return li.textContent;})[0];
+    setStatus("まだ終了できません: "+(ng||"オーダーと範囲を入れてください"),"ng");return;
+  }
+  finishing=true;var sn=serial();log("終了("+src+") 通番 "+sn);
+  doSave(function(ok){
+    finishing=false;
+    if(!ok)return;
+    setStatus("通番 "+sn+" の確認を終了しました","ok");
+    setTimeout(goNext,2600);                          /* 音声の案内が重ならないよう間を空ける */
+  });
+}
+/* パレットラベル(通番ラベル)のQR。MVP,01,通番,… / MVP,02,通番,… / 手書き用 MVPH,01,B番号 */
+function onPalletLabel(txt){
+  var now=Date.now();if(txt===lastLabelQR&&now-lastLabelAt<5000)return;lastLabelQR=txt;lastLabelAt=now;
+  var m=/^MVP,0[12],(\d{1,4}),/.exec(txt+",");
+  if(!m){setStatus("手書きラベルです。通番を入れて「確認して終了」","ng");return;}
+  var ls=String(Number(m[1])),cs=serial()?String(Number(serial())):"";
+  if(!cs){applySerial(ls,true);$("serialInfo").textContent="(パレットラベルから)";setStatus("通番 "+ls+" をセット。カートンを撮影","ok");return;}
+  if(ls!==cs){setStatus("ラベル通番 "+ls+" ≠ 確認中 "+cs,"ng");toast("パレットラベルの通番が違います","ng","ラベル "+ls+" / 確認中 "+cs+"(タップで閉じる)");return;}
+  finishPallet("パレットラベル");
+}
+$("finish").addEventListener("click",function(){finishPallet("ボタン");});
+function goNext(){$("next").click();}
 $("next").addEventListener("click",function(){
   $("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;$("save").textContent="記録する(未確認・差異あり)";
   cur={order:null,info:null};$("ordMeta").textContent="";$("sumiInfo").textContent="";$("otherRecs").innerHTML="";$("myRecs").innerHTML="";$("histBox").classList.add("hidden");$("saveStatus").textContent="";
@@ -785,6 +830,8 @@ function tick(){
     /* 認証QR */
     if(/^US-[0-9A-F]{32}$/.test(txt)){busy=false;if(txt!==token)tryToken(txt);return;}
     if(!token){busy=false;setStatus("先に本人用の認証QRを読んでください。","ng");return;}
+    /* 第1.16版: パレットラベル(通番ラベル)のQRなら、このパレットの確認を終える */
+    if(/^MVPH?,\d{2},/.test(txt)){busy=false;onPalletLabel(txt);return;}
     var p=res[0].position;var q=[p.topLeft,p.topRight,p.bottomRight,p.bottomLeft].map(function(o){return {x:o.x/sc,y:o.y/sc};});
     lastQuad=q;lastSeen=Date.now();var side=Math.hypot(q[1].x-q[0].x,q[1].y-q[0].y);
     if(st.qr!==txt){
