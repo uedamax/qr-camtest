@@ -119,6 +119,7 @@ pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;paddi
 .mgrid .v.cno{text-align:right}
 .mgrid .cn{display:block;font-size:30px;line-height:1.1}
 .mgrid .cr{display:block;font-size:13px;font-weight:normal}
+.mgrid .cnchk{grid-column:1/-1;text-align:right;color:var(--ng);font-weight:800;font-size:min(4.6vw,18px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .statusLine{margin-top:8px;padding:8px;border-radius:6px;font-weight:bold;background:var(--bg);border-left:5px solid var(--line)}
 .statusLine.ok{background:var(--okbg);border-left-color:var(--ok)}
 .statusLine.ng{background:var(--ngbg);border-left-color:var(--ng)}
@@ -166,7 +167,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.10版 / 2026-11-18 / 「写す」を「カメラで撮影」に(第1.9版: 案内を映像の下の1行に)</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.11版 / 2026-11-18 / カートン番号の下に「カートンの番号を確認してください」(赤)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -494,6 +495,7 @@ function runMatch(force){
   h+='<span class="k">OrderNo</span><span class="v big">'+(o?esc(fullOrder(o)):'<span class="meta">未確定</span>')+'</span>';
   var rng=(hit.length===1?"カートン番号は "+hit[0].from+"〜"+hit[0].to:"")+(o?(hit.length===1?" / ":"")+"全 "+o.cartons+"箱":"");
   h+='<span class="k">カートン番号</span><span class="v cno">'+(n!==null?'<span class="cn">'+n+(st.manual.num?" ✎":"")+'</span>':'<span class="meta">未読取</span>')+(rng?'<span class="meta cr">'+rng+'</span>':'')+'</span>';
+  h+='<span class="cnchk">カートンの番号を確認してください</span>'; /* 第1.11版 */
   h+='</div>';
   if(pq.lots.length)h+='<div class="mlots">LOT: '+pq.lots.map(function(x){var a=x.split("=");return esc(a[0])+" × "+Number(a[1]).toLocaleString();}).join(" / ")+' / TOTAL '+Number(pq.total||0).toLocaleString()+'</div>';
   if(cands.length>1||(cands.length&&hit.length!==1))h+='<div class="mpick">'+cands.map(function(r){return '<button type="button" data-s="'+esc(r.serial)+'">通番 '+esc(r.serial)+'<br><small>'+r.from+'〜'+r.to+'</small></button>';}).join("")+'</div>';
