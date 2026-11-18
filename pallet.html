@@ -181,7 +181,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.24版 / 2026-11-18 / パレットラベルを読むときはQR用の四角だけを出す・画像の保存失敗を表示</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.25版 / 2026-11-18 / 「確認した」にチェックしたらカメラの枠をパレットラベル用に切り替える</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -353,7 +353,7 @@ var SPK=[
   [/^通番 \d+ は住友リストに/,"その つうばんは、すみともの リストに ありません。"],
   [/^通番 \d+ のオーダーが一覧に/,"その つうばんの オーダーが、いちらんに ありません。"],
   [/^通番を入れてから/,"つうばんを いれてから、けってい を おしてください。"],
-  [/^パレットラベルのQRを白い枠/,"パレットラベルの キューアールを、しろい わくに あわせてください。"],
+  [/^パレットラベルのQRを白い/,"パレットラベルの キューアールを、しろい わくに あわせてください。"],
   [/^通番 \d+ の残り/,"この パレットには、まだ ほかの オーダーが あります。のこりの オーダーを えらんで、きろく してください。"]
 ];
 var WORDS=[[/QR/g,"キューアール"],[/本人用/g,"じぶんの"],[/認証/g,"にんしょう"],[/下4桁/g,"しも よんけた"],[/通番/g,"つうばん"],[/枠/g,"わく"],[/読取/g,"よみとり"],[/記録/g,"きろく"],[/棚卸/g,"たなおろし"],[/[「」()()]/g," "]];
@@ -680,8 +680,11 @@ function updateRings(){
   ring($("stage"),waitLabel);
 }
 var waitLabel=false;
+/* 第1.25版: 「確認した」にチェックした後 (記録前) と「パレットラベルを読む」の後は、パレットラベル用の枠にする */
+function labelMode(){var cb=$("confirmed");return waitLabel||(!!cb&&cb.checked&&!justSaved);}
 ["from","to"].forEach(function(id){$(id).addEventListener("input",check);});
-$("confirmed").addEventListener("change",function(){this.dataset.key=this.checked?((cur.order?cur.order.order:"")+"|"+(+$("from").value)+"|"+(+$("to").value)):"";check();});
+$("confirmed").addEventListener("change",function(){this.dataset.key=this.checked?((cur.order?cur.order.order:"")+"|"+(+$("from").value)+"|"+(+$("to").value)):"";check();
+  if(this.checked&&!justSaved)setStatus("パレットラベルのQRを白い四角に合わせる","");});
 
 var justSaved=null;
 function unsave(){if(justSaved){justSaved=null;check();}}
@@ -754,7 +757,7 @@ $("readLabel").addEventListener("click",function(){
   waitLabel=true;updateRings();
   if($("start").textContent==="開始")$("start").click();
   $("stage").scrollIntoView({block:"start",behavior:"smooth"});
-  setStatus("パレットラベルのQRを白い枠に合わせる","");
+  setStatus("パレットラベルのQRを白い四角に合わせる","");
 });
 function goNext(){$("next").click();}
 $("next").addEventListener("click",function(){
@@ -886,7 +889,7 @@ function drawGuide(){
   octx.setTransform(dpr,0,0,dpr,0,0);octx.clearRect(0,0,W,H);
   if(!token)return; /* 認証QRを読むときは枠を出さない */
   /* 第1.24版: パレットラベルを読むときは、カートンラベル用の枠(ラベルの外枠・番号の枠)を出さず、QR 用の四角だけを出す */
-  if(waitLabel){
+  if(labelMode()){
     var sq=Math.min(W,H)*0.55,sx=(W-sq)/2,sy=(H-sq)/2+10;
     octx.setLineDash([]);octx.strokeStyle="rgba(255,255,255,.95)";octx.lineWidth=3;octx.strokeRect(sx,sy,sq,sq);
     octx.font="bold 16px sans-serif";octx.fillStyle="#fff";octx.textAlign="center";octx.fillText("パレットラベルの QR をこの四角に",W/2,sy-10);octx.textAlign="start";
@@ -967,7 +970,7 @@ function start(){
   .then(function(s){stream=s;video.srcObject=s;video.play();setStartBtn("run");
     if(!worker){var bid=busyStart("ocr","文字認識の準備中(初回は約6MB)");prepWorker().then(function(){busyEnd(bid,true);},function(e){busyEnd(bid,false);log("tesseract失敗 "+e);toast("文字認識の準備に失敗","ng","画面を読み込み直してください");});}
     timer=setInterval(tick,200);
-    setStatus(!token?"本人用の認証QRをカメラで撮影してください。":(waitLabel?"パレットラベルのQRを白い枠に合わせる":"カートンラベルを白い枠に合わせてください。"));})
+    setStatus(!token?"本人用の認証QRをカメラで撮影してください。":(labelMode()?"パレットラベルのQRを白い四角に合わせる":"カートンラベルを白い枠に合わせてください。"));})
   .catch(function(e){setStartBtn("");setStatus("カメラを開始できません: "+e.name,"ng");toast("カメラを開始できません","ng",e.name+"(タップで閉じる)");});
 }
 function stop(){if(timer){clearInterval(timer);timer=null;}if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}lastQuad=null;drawGuide();setStartBtn("");setStatus("停止中。");}
