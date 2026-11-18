@@ -153,6 +153,11 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
 #toast small{display:block;font-size:13px;font-weight:normal;opacity:.9;margin-top:2px}
 .confirm{display:flex;flex-direction:row-reverse;justify-content:space-between;gap:8px;align-items:center;margin-top:8px;padding:8px;border-radius:6px;background:var(--bg);font-weight:bold}
 .confirm input{width:26px;height:26px}
+/* 第1.13版: 「確認した」のチェックを目立たせる。押せるときはオレンジ、チェック後は緑 */
+.confirm{border:2px solid transparent}
+.confirm:has(input:not(:disabled)){background:#ff9800;color:#111;border-color:#e65100}
+.confirm:has(input:checked){background:var(--ok);color:#fff;border-color:var(--ok)}
+.confirm:has(input:not(:disabled)) input{width:32px;height:32px;accent-color:#0b5d2e}
 .lnk{align-self:center;color:var(--accent)}
 </style>
 </head>
@@ -167,7 +172,7 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.12版 / 2026-11-18 / カートン番号の下に「カートン数を確認してください N箱」(赤)</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.13版 / 2026-11-18 / 「確認した」のチェックをオレンジの地に(チェック後は緑)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
