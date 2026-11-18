@@ -181,7 +181,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.23版 / 2026-11-18 / オーダーが決まっていないときはオーダーの選び欄を赤い丸で囲む</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.24版 / 2026-11-18 / パレットラベルを読むときはQR用の四角だけを出す・画像の保存失敗を表示</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -696,9 +696,9 @@ function doSave(onDone){
   .then(function(j){
     if(!j.ok)throw new Error(j.error);
     photos={};   /* 送った画像は消す (同じパレットの次のオーダーで重ねて送らない) */
-    if(j.photoError)log("画像の保存に失敗: "+j.photoError);else if(j.photoLinks)log("画像を保存: "+j.photoLinks.split(" ").length+"枚");
+    var pe=j.photoError?" / 画像は保存できませんでした":"";if(j.photoError)log("画像の保存に失敗: "+j.photoError);else if(j.photoLinks)log("画像を保存: "+j.photoLinks.split(" ").length+"枚");
     var head=(j.confirmed?"☑ 棚卸確認を記録しました":"記録しました(未確認)");
-    $("saveStatus").textContent=head+" 通番 "+sn+" / "+od+" "+fr+"〜"+to+"(範囲内 "+j.inRange+" / "+j.sumiMatch+" / "+j._sec.toFixed(1)+"秒)";$("saveStatus").className="status ok";
+    $("saveStatus").textContent=head+" 通番 "+sn+" / "+od+" "+fr+"〜"+to+"(範囲内 "+j.inRange+" / "+j.sumiMatch+" / "+j._sec.toFixed(1)+"秒)"+pe;$("saveStatus").className="status ok";
     toast(head,"ok","通番 "+sn+" / "+od+" "+fr+"〜"+to+" / "+j._sec.toFixed(1)+"秒");
     justSaved={sec:j._sec,confirmed:j.confirmed};
     cur.info=j.info;showInfo();check();log("記録 "+sn+" "+od+" "+fr+"-"+to);
@@ -885,6 +885,18 @@ function drawGuide(){
   if(ov.width!==W*dpr||ov.height!==H*dpr){ov.width=W*dpr;ov.height=H*dpr;}
   octx.setTransform(dpr,0,0,dpr,0,0);octx.clearRect(0,0,W,H);
   if(!token)return; /* 認証QRを読むときは枠を出さない */
+  /* 第1.24版: パレットラベルを読むときは、カートンラベル用の枠(ラベルの外枠・番号の枠)を出さず、QR 用の四角だけを出す */
+  if(waitLabel){
+    var sq=Math.min(W,H)*0.55,sx=(W-sq)/2,sy=(H-sq)/2+10;
+    octx.setLineDash([]);octx.strokeStyle="rgba(255,255,255,.95)";octx.lineWidth=3;octx.strokeRect(sx,sy,sq,sq);
+    octx.font="bold 16px sans-serif";octx.fillStyle="#fff";octx.textAlign="center";octx.fillText("パレットラベルの QR をこの四角に",W/2,sy-10);octx.textAlign="start";
+    if(lastQuad&&video.videoWidth&&Date.now()-lastSeen<1500){
+      var k2=Math.max(W/video.videoWidth,H/video.videoHeight),dx2=(W-video.videoWidth*k2)/2,dy2=(H-video.videoHeight*k2)/2,q2=lastQuad;
+      octx.beginPath();q2.forEach(function(p,i){var x=p.x*k2+dx2,y=p.y*k2+dy2;if(i)octx.lineTo(x,y);else octx.moveTo(x,y);});octx.closePath();
+      octx.fillStyle="rgba(76,195,138,.25)";octx.fill();octx.strokeStyle="#4cc38a";octx.lineWidth=3;octx.stroke();
+    }
+    return;
+  }
   var lw=LABEL.u1-LABEL.u0,lh=LABEL.v1-LABEL.v0;var top0=56,bot0=44;var s=Math.min(W*0.9/lw,(H-top0-bot0)*0.95/lh);
   var ox=(W-lw*s)/2-LABEL.u0*s,oy=top0+((H-top0-bot0)-lh*s)/2-LABEL.v0*s;
   function r(b,col,dash){octx.setLineDash(dash||[]);octx.strokeStyle=col;octx.lineWidth=2;octx.strokeRect(ox+b.u0*s,oy+b.v0*s,(b.u1-b.u0)*s,(b.v1-b.v0)*s);}
