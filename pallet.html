@@ -181,7 +181,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.20版 / 2026-11-18 / 「パレットラベルを読む」ボタンを付ける</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.21版 / 2026-11-18 / 読めた瞬間の画像を記録と一緒に送る</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -257,6 +257,16 @@ var $=function(id){return document.getElementById(id);};
 var video=$("video"),ov=$("ov"),octx=ov.getContext("2d");
 var full=document.createElement("canvas"),fctx=full.getContext("2d",{willReadFrequently:true});
 var small=document.createElement("canvas"),sctx=small.getContext("2d",{willReadFrequently:true});
+/* 第1.21版: 読めた瞬間のカメラの 1 コマを取っておき、記録と一緒にサーバへ送る (carton / label) */
+var photos={};
+function snap(kind){
+  try{if(!full.width)return;var s=Math.min(1,1024/Math.max(full.width,full.height));
+    var c=document.createElement("canvas");c.width=Math.round(full.width*s);c.height=Math.round(full.height*s);
+    c.getContext("2d").drawImage(full,0,0,c.width,c.height);
+    photos[kind]=c.toDataURL("image/jpeg",0.7).split(",")[1];
+    log("画像 "+(kind==="carton"?"カートンラベル":"パレットラベル")+" "+Math.round(photos[kind].length*0.75/1024)+"KB");
+  }catch(e){log("画像を取れません: "+e.message);}
+}
 var stream=null,timer=null,busy=false,worker=null,workerReady=false,lastQuad=null,lastSeen=0;
 var token=null,userName="",ORDERS=null,SUMI=[];
 
@@ -681,9 +691,11 @@ $("save").addEventListener("click",function(){doSave();});
 function doSave(onDone){
   var b=$("save");$("saveStatus").textContent="記録中…";$("saveStatus").className="status";
   var sn=serial(),od=cur.order.order,fr=$("from").value,to=$("to").value;
-  api({action:"saveRange",serial:sn,order:od,from:+fr,to:+to,scanned:st.fixed.num||"",scanSrc:st.fixed.num?(st.manual.num?"手入力":"OCR"):"未読取",confirmed:$("confirmed").checked,qrId:st.pq?st.pq.id:"",note:$("note").value},b,"記録中")
+  api({action:"saveRange",serial:sn,order:od,from:+fr,to:+to,scanned:st.fixed.num||"",scanSrc:st.fixed.num?(st.manual.num?"手入力":"OCR"):"未読取",confirmed:$("confirmed").checked,qrId:st.pq?st.pq.id:"",note:$("note").value,photos:{carton:photos.carton||"",label:photos.label||""}},b,"記録中")
   .then(function(j){
     if(!j.ok)throw new Error(j.error);
+    photos={};   /* 送った画像は消す (同じパレットの次のオーダーで重ねて送らない) */
+    if(j.photoError)log("画像の保存に失敗: "+j.photoError);else if(j.photoLinks)log("画像を保存: "+j.photoLinks.split(" ").length+"枚");
     var head=(j.confirmed?"☑ 棚卸確認を記録しました":"記録しました(未確認)");
     $("saveStatus").textContent=head+" 通番 "+sn+" / "+od+" "+fr+"〜"+to+"(範囲内 "+j.inRange+" / "+j.sumiMatch+" / "+j._sec.toFixed(1)+"秒)";$("saveStatus").className="status ok";
     toast(head,"ok","通番 "+sn+" / "+od+" "+fr+"〜"+to+" / "+j._sec.toFixed(1)+"秒");
@@ -726,6 +738,7 @@ function finishPallet(src){
 function onPalletLabel(txt){
   waitLabel=false;updateRings();
   var now=Date.now();if(txt===lastLabelQR&&now-lastLabelAt<5000)return;lastLabelQR=txt;lastLabelAt=now;
+  snap("label");
   var m=/^MVP,0[12],(\d{1,4}),/.exec(txt+",");
   if(!m){setStatus("手書きラベルです。通番を入れて「確認して終了」","ng");return;}
   var ls=String(Number(m[1])),cs=serial()?String(Number(serial())):"";
@@ -744,7 +757,7 @@ $("readLabel").addEventListener("click",function(){
 });
 function goNext(){$("next").click();}
 $("next").addEventListener("click",function(){
-  waitLabel=false;
+  waitLabel=false;photos={};
   $("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;$("save").textContent="記録する(未確認・差異あり)";
   cur={order:null,info:null};$("ordMeta").textContent="";$("sumiInfo").textContent="";$("otherRecs").innerHTML="";$("myRecs").innerHTML="";$("histBox").classList.add("hidden");$("saveStatus").textContent="";
   $("ordSel").innerHTML='<option value="">(QRを読むと候補が出ます)</option>';$("ordManual").value="";$("useSumi").classList.add("hidden");
@@ -908,7 +921,7 @@ function tick(){
     lastQuad=q;lastSeen=Date.now();var side=Math.hypot(q[1].x-q[0].x,q[1].y-q[0].y);
     if(st.qr!==txt){
       if(st.qr)log("別のQRを検出したので読み直し");
-      resetScan();st.qr=txt;st.pq=parseQR(txt);st.qrAt=Date.now();
+      resetScan();st.qr=txt;st.pq=parseQR(txt);st.qrAt=Date.now();if(st.pq)snap("carton");
       toast(st.pq?"QRを読みました: "+st.pq.pn:"QRを読みました(カートンラベル以外)",st.pq?"ok":"info");
       $("qrLine").textContent=st.pq?("QR: 品番 "+st.pq.pn+" / "+st.pq.name+" / 1番目 "+st.pq.id+" / 日時 "+st.pq.dt+" / TOTAL "+st.pq.total):("QR(カートンラベルの書式ではありません): "+txt);
       log("QR読取 "+(st.pq?st.pq.pn+" "+st.pq.id:txt.slice(0,40)));
