@@ -147,6 +147,9 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
 #busy .bar{height:5px;background:rgba(255,255,255,.2);border-radius:3px;margin-top:5px;overflow:hidden}
 #busy .bar i{display:block;height:100%;width:0;background:#5aa9f0;transition:width .2s linear}
 #busy .bar i.over{background:#f0b04c}
+/* 第1.27版: 版数をいつも見える所 (右上) に出す */
+#verBadge{position:fixed;top:calc(4px + env(safe-area-inset-top,0px));right:6px;z-index:70;background:rgba(20,32,43,.78);color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:10px;pointer-events:none}
+.autonote{margin:4px 2px 0;color:var(--ok);font-weight:700}
 #toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;min-width:min(86vw,360px);max-width:94vw;padding:14px 18px;border-radius:12px;color:#fff;font-size:18px;font-weight:bold;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.35)}
 #toast.ok{background:#13804a}#toast.ng{background:#c62828}#toast.info{background:#14202b}
 #toast.ok,#toast.info{pointer-events:none}
@@ -181,7 +184,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.26版 / 2026-11-18 / パレットラベルも全体の外枠とQRの位置の枠を出す</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.27版 / 2026-11-18 / 版数を右上にいつも出す・パレットラベルを読むと自動で確認完了になることを画面に書く</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -225,6 +228,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <ul class="checks" id="checks"></ul>
  <details open><summary>差異メモ(違いがあれば)</summary><textarea id="note" placeholder="例: 12番の箱が見当たらない / ラベル汚れ"></textarea></details>
  <label class="confirm"><input type="checkbox" id="confirmed"> <span id="confirmText">オーダーと範囲を入れると確認できます</span></label>
+ <div class="meta autonote">数が合っていれば、パレットラベルの QR を読むだけで自動でチェックして記録します</div>
  <div class="btns"><a class="lnk" href="list.html" target="_blank">確認一覧</a><button id="next">次のパレット</button><button id="save" class="primary" disabled>記録する(未確認・差異あり)</button></div>
  <div class="btns"><button id="readLabel" class="labelbtn">パレットラベルを読む(QRを撮影して終了)</button></div>
  <div class="btns"><button id="finish" class="finishbtn">確認して終了(ラベルが読めないとき)</button></div>
@@ -682,6 +686,7 @@ function updateRings(){
   ring($("stage"),waitLabel);
 }
 var waitLabel=false;
+(function(){var v=(document.querySelector(".ver").textContent.match(/第[0-9.]+版/)||[""])[0];var b=document.createElement("div");b.id="verBadge";b.textContent=v;document.body.appendChild(b);})();
 /* 第1.25版: 「確認した」にチェックした後 (記録前) と「パレットラベルを読む」の後は、パレットラベル用の枠にする */
 function labelMode(){var cb=$("confirmed");return waitLabel||(!!cb&&cb.checked&&!justSaved);}
 ["from","to"].forEach(function(id){$(id).addEventListener("input",check);});
