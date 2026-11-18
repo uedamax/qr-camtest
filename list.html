@@ -53,7 +53,7 @@ button.working{background:#5b6875;border-color:#5b6875;color:#fff}
 </head>
 <body>
 <h1>パレット確認一覧(引っ越し用・試作)</h1>
-<div class="ver">第1.3版 / 2026-11-15 / 確認取消の表示</div>
+<div class="ver">第1.4版 / 2026-11-18 / 接続先を Apps Script 第2.5版のデプロイに切り替え</div>
 
 <div class="login hidden" id="login">
  <div>この端末はまだログインしていません。スマホでは <a href="pallet.html">パレット確認</a> で認証QRを読むと、この一覧も見られます。PCでは、管理者から受け取ったトークン(US-で始まる文字列)を貼り付けてください。</div>
@@ -78,7 +78,7 @@ button.working{background:#5b6875;border-color:#5b6875;color:#fff}
 <script>
 (function(){
 "use strict";
-var API="https://script.google.com/macros/s/AKfycbyegIoGqW6QQdi3U4RpDKIk0b5EtnlWBiUMpWdm49dqfI1tMGsjLb-uPcuEbJ7EYInv7w/exec";
+var API="https://script.google.com/macros/s/AKfycbx5pITwYiVGCI6RGgZGdbF_imkfet5Snqv1shg0l6ycgdq2PTSjTTyJkpzPV4P45PaVlQ/exec";
 var TOKEN_KEY="qr_lookup_token_v1",PREF_KEY="pallet_list_pref_v1";
 var $=function(id){return document.getElementById(id);};
 var token=null,data=null,tab="serial";
