@@ -177,7 +177,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.18版 / 2026-11-18 / 今の作業で確かめる所を赤い楕円で囲む</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.19版 / 2026-11-18 / カートン番号の範囲も赤い楕円で囲む</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -656,7 +656,7 @@ function updateRings(){
   ring(hit,todo&&!!hit);
   ring(mb.querySelector(".cnchk"),todo&&!!hit);
   ring(mb.querySelector(".ordno"),todo&&!!hit);
-  ring(document.querySelector(".range"),todo&&!hit);       /* 手入力のときは範囲(箱の数)を確かめる */
+  ring(document.querySelector(".range"),todo);             /* 第1.19版: このパレットに載っているカートン番号(範囲)は、いつも確かめる */
   ring(document.querySelector(".confirm"),todo);
   ring($("finish"),cb.checked&&!justSaved);
 }
