@@ -49,6 +49,10 @@ video{display:block;width:100%;height:100%;object-fit:cover}
 .hudmsg{position:absolute;left:5px;right:5px;bottom:5px;background:rgba(0,0,0,.62);color:#fff;border-radius:8px;padding:3px 8px;font-size:12px;display:flex;gap:6px;align-items:center;pointer-events:none}
 .hudmsg img{height:30px;background:#fff;border-radius:3px}
 .hudmsg span{flex:1;min-width:0}
+/* 第1.8版: カメラの上の案内も大きく、黄色の帯に(読めた=緑、問題=赤) */
+.hudmsg{font-size:min(4.6vw,18px);font-weight:800;background:rgba(255,196,0,.94);color:#111;padding:6px 10px}
+.hudmsg.ok{background:rgba(19,128,74,.94);color:#fff}
+.hudmsg.ng{background:rgba(198,40,40,.94);color:#fff}
 .btns{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;justify-content:flex-end}
 .btns .lnk{margin-right:auto}
 button{font:inherit;font-size:15px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg);min-height:44px}
@@ -69,6 +73,15 @@ button:disabled{opacity:.45}
 .checks li.ng{background:var(--ngbg);border-left-color:var(--ng)}
 .checks li.warn{background:var(--warnbg);border-left-color:var(--warn)}
 .status{font-size:13px;color:var(--sub);min-height:1.4em}
+/* 第1.8版: 作業者への案内(上の帯)を大きく、色付きに */
+#status{font-size:min(5.6vw,22px);font-weight:800;line-height:1.35;color:var(--fg);background:var(--warnbg);border:3px solid var(--warn);border-radius:10px;padding:8px 12px;margin:6px 0}
+#status.ok{background:var(--okbg);border-color:var(--ok)}
+#status.ng{background:var(--ngbg);border-color:var(--ng);color:var(--ng)}
+#status:empty{display:none}
+@keyframes blink3{0%,100%{opacity:1}50%{opacity:.12}}
+.blink{animation:blink3 .45s ease-in-out 3}
+#voice.off{opacity:.55;text-decoration:line-through}
+.top h1{flex:1 1 100%;min-width:0}
 .status.ng{color:var(--ng)}.status.ok{color:var(--ok)}
 textarea{width:100%;min-height:48px;font-size:14px}
 .recs{font-size:13px;margin:4px 0 0;padding-left:1.2em}
@@ -150,8 +163,9 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.7版 / 2026-11-15 / 照合表示の並びをラベルに合わせる</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.8版 / 2026-11-18 / 住友の移管リスト(11/24〜27・319パレット)に対応</div></h1>
  <div class="who" id="who">未ログイン</div>
+ <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
 </div>
 <div class="serial"><label for="serial">通番</label><input id="serial" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="自動"><span class="meta" id="serialInfo"></span></div>
@@ -235,7 +249,69 @@ var cur={order:null,info:null}; /* 選んだオーダーと、通番の情報 */
 function resetScan(){st={qr:null,pq:null,votes:{num:{},ord:{}},fixed:{num:null,ord:null},manual:{num:false},qrAt:0};renderScan();}
 
 function log(m){var p=$("log");var t=new Date().toLocaleTimeString("ja-JP",{hour12:false});p.textContent=t+" "+m+"\n"+p.textContent.slice(0,4000);}
-function setStatus(t,c){var s=$("status");s.textContent=t;s.className="status "+(c||"");$("hudMsg").textContent=t;}
+/* 第1.8版: 作業者への案内を大きく・色付きで出し、変わったときは3回点滅させ、音声でも読み上げる */
+var voiceOn=true;try{voiceOn=localStorage.getItem("pallet_voice")!=="off";}catch(e){}
+var lastSaid={},lastSayAt=0;
+function blink(el){if(!el)return;el.classList.remove("blink");void el.offsetWidth;el.classList.add("blink");}
+function isProgress(t){return /…|\d+ms|\d+px/.test(t);} /* 途中経過(毎コマ変わる表示)は点滅・音声の対象外 */
+function say(t,urgent){
+  if(!voiceOn||!window.speechSynthesis||!t)return;
+  var now=Date.now();
+  if(lastSaid[t]&&now-lastSaid[t]<8000)return;      /* 同じ案内は8秒以内に繰り返さない */
+  if(!urgent&&now-lastSayAt<2500)return;            /* 案内が続けて変わるときは間を空ける */
+  lastSaid[t]=now;lastSayAt=now;
+  try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(speechText(t));u.lang="ja-JP";u.rate=1.0;u.pitch=1.0;var v=pickVoice();if(v)u.voice=v;speechSynthesis.speak(u);}catch(e){}
+}
+/* 読み上げ用の文。漢字のままだと読み違える(本人用・下4桁・枠 など)ので、案内ごとに かな の文を持たせる。
+   読点(、)と空白で区切ると、声の抑揚が自然になる。 */
+var SPK=[
+  [/^「開始」を押して/,"かいし ボタンを おして、じぶんの、にんしょう キューアールを、うつしてください。"],
+  [/^認証QRが無効/,"にんしょうの キューアールが、むこうです。"],
+  [/^通信エラー/,"つうしん エラーです。でんぱを、かくにんしてください。"],
+  [/^準備OK/,"じゅんび、オーケーです。カートンラベルを、わくに、あわせてください。"],
+  [/^オーダー一覧の読込に失敗/,"オーダーの いちらんを、よみこめませんでした。"],
+  [/^次のパレット/,"つぎの パレットです。カートンラベルを、わくに、あわせてください。"],
+  [/^カートン番号だけ読み直/,"カートン ばんごうだけ、よみなおします。"],
+  [/^オーダー下4桁だけ読み直/,"オーダーの、しも よんけただけ、よみなおします。"],
+  [/^QRが見えていません/,"キューアールが、みえていません。ラベルを、わくに、あわせてください。"],
+  [/^先に本人用の認証QR/,"さきに、じぶんの、にんしょう キューアールを、よんでください。"],
+  [/^QR・カートン番号・下4桁を読みました/,"よみとりました。はんいを いれて、きろくする、を おしてください。"],
+  [/^エラー/,"エラーが、おきました。"],
+  [/^カメラが使えません/,"カメラが、つかえません。"],
+  [/^カートンラベルを白い枠/,"カートンラベルを、しろい わくに、あわせてください。"],
+  [/^本人用の認証QRを写して/,"じぶんの、にんしょう キューアールを、うつしてください。"],
+  [/^カメラを開始できません/,"カメラを、かいし できません。"],
+  [/^停止中/,"ていし しました。"],
+  [/^読み直します/,"よみなおします。ラベルを、わくに、あわせてください。"],
+  [/^音声の案内をオン/,"おんせいの あんないを、オンに しました。"]
+];
+var WORDS=[[/QR/g,"キューアール"],[/本人用/g,"じぶんの"],[/認証/g,"にんしょう"],[/下4桁/g,"しも よんけた"],[/通番/g,"つうばん"],[/枠/g,"わく"],[/読取/g,"よみとり"],[/記録/g,"きろく"],[/棚卸/g,"たなおろし"],[/[「」()()]/g," "]];
+function speechText(t){
+  for(var i=0;i<SPK.length;i++)if(SPK[i][0].test(t))return SPK[i][1];
+  var s=String(t);WORDS.forEach(function(w){s=s.replace(w[0],w[1]);});return s;
+}
+/* 日本語の声のうち、抑揚の自然なものを選ぶ(Windows の Natural 音声・Google・iPhone の Kyoko など) */
+var voiceCache=null;
+function pickVoice(){
+  if(voiceCache)return voiceCache;
+  var vs=(window.speechSynthesis&&speechSynthesis.getVoices())||[];
+  var ja=vs.filter(function(v){return /^ja/i.test(v.lang);});
+  if(!ja.length)return null;
+  var pref=[/Nanami.*Natural|Natural.*Nanami/i,/Natural/i,/Online/i,/Google/i,/Kyoko|O-ren|Otoya/i,/Haruka|Nanami/i];
+  for(var i=0;i<pref.length;i++){var h=ja.filter(function(v){return pref[i].test(v.name);})[0];if(h){voiceCache=h;return h;}}
+  voiceCache=ja[0];return voiceCache;
+}
+if(window.speechSynthesis)speechSynthesis.onvoiceschanged=function(){voiceCache=null;};
+function setStatus(t,c){
+  var s=$("status");var changed=s.textContent!==t;
+  s.textContent=t;s.className="status "+(c||"");
+  $("hudMsg").textContent=t;$("hudMsg").parentNode.className="hudmsg "+(c||"");
+  if(changed&&t&&!isProgress(t)){
+    blink(s);blink($("hudMsg").parentNode);
+    if(/「開始」/.test(t))blink($("start"));
+    say(t,c==="ng");
+  }
+}
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
 
 /* ---------- 待ち時間の表示 ---------- */
@@ -260,6 +336,7 @@ function toast(msg,kind,sub){
   var el=$("toast");el.className=kind||"info";el.innerHTML=esc(msg)+(sub?"<small>"+esc(sub)+"</small>":"");
   if(toastTimer)clearTimeout(toastTimer);
   if(navigator.vibrate)try{navigator.vibrate(kind==="ng"?[200,100,200]:kind==="ok"?80:30);}catch(e){}
+  blink(el);if(kind==="ng")say(msg,true);
   if(kind!=="ng")toastTimer=setTimeout(function(){el.classList.add("hidden");},kind==="ok"?3000:1800);
 }
 $("toast").addEventListener("click",function(){this.classList.add("hidden");});
@@ -297,6 +374,12 @@ function loadOrders(){
       if(st.pq)fillOrders();runMatch(true);});
   }).catch(function(e){setStatus("オーダー一覧の読込に失敗: "+e.message,"ng");toast("オーダー一覧の読込に失敗","ng","タップで閉じます。画面を読み込み直してください");});
 }
+/* 第1.8版: 音声のON/OFF。iPhoneは最初にボタンを押したときでないと声が出ないので、最初のタップで準備する */
+function drawVoice(){$("voice").textContent=voiceOn?"音声 ON":"音声 OFF";$("voice").classList.toggle("off",!voiceOn);}
+drawVoice();
+$("voice").addEventListener("click",function(){voiceOn=!voiceOn;try{localStorage.setItem("pallet_voice",voiceOn?"on":"off");}catch(e){}drawVoice();if(voiceOn){lastSaid={};lastSayAt=0;say("音声の案内をオンにしました",true);}else if(window.speechSynthesis)speechSynthesis.cancel();});
+var voiceReady=false;
+document.addEventListener("click",function(){if(voiceReady||!window.speechSynthesis)return;voiceReady=true;try{var u=new SpeechSynthesisUtterance(" ");u.volume=0;speechSynthesis.speak(u);}catch(e){}},true);
 $("logout").addEventListener("click",function(){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;ORDERS=null;setLogin("");});
 
 /* ---------- QRの分解 ---------- */
@@ -313,8 +396,11 @@ function parseQR(t){
 function fillOrders(){
   var sel=$("ordSel");if(!ORDERS)return;
   var pn=st.pq?st.pq.pn:"";var l4=st.fixed.ord||$("ordManual").value.replace(/\D/g,"");
-  var list=ORDERS.filter(function(o){return !pn||o.pn===pn;});
-  if(l4.length===4&&!pn)list=ORDERS.filter(function(o){return o.last4===l4;});
+  /* 第1.8版: 住友の移管リストが入っていれば、候補は移管するオーダーだけにする(出荷済みのオーダーを出さない) */
+  var base=ORDERS;
+  if(SUMI.length){var inS={};SUMI.forEach(function(r){inS[r.order]=1;});var b2=ORDERS.filter(function(o){return inS[o.order];});if(b2.length)base=b2;}
+  var list=base.filter(function(o){return !pn||o.pn===pn;});
+  if(l4.length===4&&!pn)list=base.filter(function(o){return o.last4===l4;});
   list.sort(function(a,b){var am=a.last4===l4?0:1,bm=b.last4===l4?0:1;return am-bm||(a.date<b.date?-1:a.date>b.date?1:0);});
   var keep=cur.order&&list.some(function(o){return o.order===cur.order.order;})?cur.order.order:"";
   var hit=l4.length===4?list.filter(function(o){return o.last4===l4;})[0]:null;
@@ -367,6 +453,8 @@ function runMatch(force){
   else if(!rows.length)h+='<div class="mserial ng"><span class="t">住友リストに '+esc(o.order)+' がありません</span></div>';
   else if(hit.length===1){var cs=serial()||hit[0].serial;h+='<div class="mserial'+(cs!==hit[0].serial?' ng':'')+'"><span class="n">通番 '+esc(cs)+'</span><span class="t warnTxt">フィルムの手書きを確認！'+(cs!==hit[0].serial?'<br><small>リストでは通番 '+esc(hit[0].serial)+'</small>':'')+'</span><button type="button" id="sfixBtn" class="sfix">通番修正</button></div>';}
   else h+='<div class="mserial ng"><span class="t">'+(n===null?"カートン番号が決まると通番を絞れます。":"カートン番号 "+n+" を含む通番がリストにありません。")+'候補から選べます:</span></div>';
+  /* 第1.8版: 住友リストの備考(出庫日・便・同じパレットのほかのオーダー・分かれたパレット) */
+  if(hit.length===1&&hit[0].note)h+='<div class="meta">住友リスト: '+esc(hit[0].note)+'</div>';
   /* ラベルと同じ項目 */
   h+='<div class="mgrid">';
   h+='<span class="k">Gentherm-#</span><span class="v big">'+esc(pq.pn)+'</span>';
