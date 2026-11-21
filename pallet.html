@@ -187,7 +187,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.28版 / 2026-11-21 / 画像は記録と別に、パレットの確認が終わってから裏で送る (記録を待たせない)</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.29版 / 2026-11-21 / 音声の案内を VOICEVOX の声 (前もって作った音声) にする・画像はパレットの確認が終わってから裏で送る</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -359,42 +359,70 @@ function say(t,urgent){
   if(lastSaid[t]&&now-lastSaid[t]<8000)return;      /* 同じ案内は8秒以内に繰り返さない */
   if(!urgent&&now-lastSayAt<2500)return;            /* 案内が続けて変わるときは間を空ける */
   lastSaid[t]=now;lastSayAt=now;
+  var vid=speechId(t);
+  if(vid){if(vbuf[vid]){try{speechSynthesis.cancel();}catch(e){}if(playVoice(vid))return;}else loadVoice(vid).catch(function(){});}
+  stopVoice();
   try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(speechText(t));u.lang="ja-JP";u.rate=1.0;u.pitch=1.0;var v=pickVoice();if(v)u.voice=v;speechSynthesis.speak(u);}catch(e){}
 }
 /* 読み上げ用の文。漢字のままだと読み違える(本人用・下4桁・枠 など)ので、案内ごとに かな の文を持たせる。
    読点(、)と空白で区切ると、声の抑揚が自然になる。 */
 var SPK=[
-  [/^「開始」を押して/,"かいし ボタンを おして、じぶんの、にんしょう キューアールを、カメラで さつえい してください。"],
-  [/^認証QRが無効/,"にんしょうの キューアールが、むこうです。"],
-  [/^通信エラー/,"つうしん エラーです。でんぱを、かくにんしてください。"],
-  [/^準備OK/,"じゅんび、オーケーです。カートンラベルを、わくに、あわせてください。"],
-  [/^オーダー一覧の読込に失敗/,"オーダーの いちらんを、よみこめませんでした。"],
-  [/^次のパレット/,"つぎの パレットです。カートンラベルを、わくに、あわせてください。"],
-  [/^カートン番号だけ読み直/,"カートン ばんごうだけ、よみなおします。"],
-  [/^オーダー下4桁だけ読み直/,"オーダーの、しも よんけただけ、よみなおします。"],
-  [/^QRが見えていません/,"キューアールが、みえていません。ラベルを、わくに、あわせてください。"],
-  [/^先に本人用の認証QR/,"さきに、じぶんの、にんしょう キューアールを、よんでください。"],
-  [/^QR・カートン番号・下4桁を読みました/,"よみとりました。はんいを いれて、きろくする、を おしてください。"],
-  [/^エラー/,"エラーが、おきました。"],
-  [/^カメラが使えません/,"カメラが、つかえません。"],
-  [/^カートンラベルを白い枠/,"カートンラベルを、しろい わくに、あわせてください。"],
-  [/^本人用の認証QRを/,"じぶんの、にんしょう キューアールを、カメラで さつえい してください。"],
-  [/^カメラを開始できません/,"カメラを、かいし できません。"],
-  [/^停止中/,"ていし しました。"],
-  [/^読み直します/,"よみなおします。ラベルを、わくに、あわせてください。"],
-  [/^音声の案内をオン/,"おんせいの あんないを、オンに しました。"],
-  [/^まだ終了できません/,"まだ、しゅうりょう できません。したの ひょうじを、かくにんしてください。"],
-  [/^手書きラベルです/,"てがきの ラベルです。つうばんを いれて、かくにんして しゅうりょう、を おしてください。"],
-  [/^ラベル通番 \d+ ≠/,"パレットラベルの つうばんが、ちがいます。"],
-  [/^通番 \d+ をセット/,"つうばんを よみました。カートンラベルを、カメラで さつえい してください。"],
-  [/^通番 \d+ の確認を終了/,"かくにんを、しゅうりょう しました。"],
-  [/^通番 \d+ を手入力/,"つうばんを、てにゅうりょく しました。カートンの かずを、かぞえてください。"],
-  [/^通番 \d+ は住友リストに/,"その つうばんは、すみともの リストに ありません。"],
-  [/^通番 \d+ のオーダーが一覧に/,"その つうばんの オーダーが、いちらんに ありません。"],
-  [/^通番を入れてから/,"つうばんを いれてから、けってい を おしてください。"],
-  [/^パレットラベル全体を白い枠/,"パレットラベルの ぜんたいを、しろい わくに あわせてください。"],
-  [/^通番 \d+ の残り/,"この パレットには、まだ ほかの オーダーが あります。のこりの オーダーを えらんで、きろく してください。"]
+  [/^「開始」を押して/,"かいし ボタンを おして、じぶんの、にんしょう キューアールを、カメラで さつえい してください。","start"],
+  [/^認証QRが無効/,"にんしょうの キューアールが、むこうです。","badtoken"],
+  [/^通信エラー/,"つうしん エラーです。でんぱを、かくにんしてください。","neterr"],
+  [/^準備OK/,"じゅんび、オーケーです。カートンラベルを、わくに、あわせてください。","ready"],
+  [/^オーダー一覧の読込に失敗/,"オーダーの いちらんを、よみこめませんでした。","ordfail"],
+  [/^次のパレット/,"つぎの パレットです。カートンラベルを、わくに、あわせてください。","next"],
+  [/^カートン番号だけ読み直/,"カートン ばんごうだけ、よみなおします。","renum"],
+  [/^オーダー下4桁だけ読み直/,"オーダーの、しも よんけただけ、よみなおします。","reord"],
+  [/^QRが見えていません/,"キューアールが、みえていません。ラベルを、わくに、あわせてください。","noqr"],
+  [/^先に本人用の認証QR/,"さきに、じぶんの、にんしょう キューアールを、よんでください。","needlogin"],
+  [/^QR・カートン番号・下4桁を読みました/,"よみとりました。はんいを いれて、きろくする、を おしてください。","readok"],
+  [/^エラー/,"エラーが、おきました。","error"],
+  [/^カメラが使えません/,"カメラが、つかえません。","nocam"],
+  [/^カートンラベルを白い枠/,"カートンラベルを、しろい わくに、あわせてください。","carton"],
+  [/^本人用の認証QRを/,"じぶんの、にんしょう キューアールを、カメラで さつえい してください。","login"],
+  [/^カメラを開始できません/,"カメラを、かいし できません。","camfail"],
+  [/^停止中/,"ていし しました。","stop"],
+  [/^読み直します/,"よみなおします。ラベルを、わくに、あわせてください。","retry"],
+  [/^音声の案内をオン/,"おんせいの あんないを、オンに しました。","voiceon"],
+  [/^まだ終了できません/,"まだ、しゅうりょう できません。したの ひょうじを、かくにんしてください。","notyet"],
+  [/^手書きラベルです/,"てがきの ラベルです。つうばんを いれて、かくにんして しゅうりょう、を おしてください。","handlabel"],
+  [/^ラベル通番 \d+ ≠/,"パレットラベルの つうばんが、ちがいます。","labelng"],
+  [/^パレットラベルの通番が違います/,"パレットラベルの つうばんが、ちがいます。","labelng"],
+  [/^通番 \d+ をセット/,"つうばんを よみました。カートンラベルを、カメラで さつえい してください。","serialset"],
+  [/^通番 \d+ の確認を終了/,"かくにんを、しゅうりょう しました。","finished"],
+  [/^通番 \d+ を手入力/,"つうばんを、てにゅうりょく しました。カートンの かずを、かぞえてください。","serialman"],
+  [/^通番 \d+ は住友リストに/,"その つうばんは、すみともの リストに ありません。","nosumi"],
+  [/^通番 \d+ のオーダーが一覧に/,"その つうばんの オーダーが、いちらんに ありません。","noorder"],
+  [/^通番を入れてから/,"つうばんを いれてから、けってい を おしてください。","needserial"],
+  [/^パレットラベル全体を白い枠/,"パレットラベルの ぜんたいを、しろい わくに あわせてください。","pallet"],
+  [/^通番 \d+ の残り/,"この パレットには、まだ ほかの オーダーが あります。のこりの オーダーを えらんで、きろく してください。","rest"],
+  [/^記録に失敗しました/,"きろくに、しっぱい しました。もういちど おしてください。","recfail"]
 ];
+/* 第1.29版: 決まった案内は、VOICEVOX で前もって作った音声 (voice/<ID>.mp3) を鳴らす。
+   まだ読み込めていない・鳴らせないときは、これまでどおり端末の読み上げ (上の かな の文) を使う */
+var VOICE_VER="1",actx=null,vbuf={},vload={},vsrc=null;
+function audioCtx(){
+  if(!actx){var C=window.AudioContext||window.webkitAudioContext;if(C)try{actx=new C();}catch(e){}
+    try{if(navigator.audioSession)navigator.audioSession.type="playback";}catch(e){}}   /* iPhone のマナーモードでも鳴らす */
+  return actx;
+}
+function loadVoice(id){
+  if(vload[id])return vload[id];var c=audioCtx();if(!c)return Promise.reject(new Error("no audio"));
+  vload[id]=fetch("voice/"+id+".mp3?v="+VOICE_VER).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.arrayBuffer();})
+    .then(function(b){return new Promise(function(res,rej){c.decodeAudioData(b,res,rej);});})
+    .then(function(buf){vbuf[id]=buf;return buf;});
+  vload[id].catch(function(){delete vload[id];});
+  return vload[id];
+}
+function stopVoice(){if(vsrc){try{vsrc.stop();}catch(e){}vsrc=null;}}
+function playVoice(id){
+  var c=audioCtx();if(!c||!vbuf[id])return false;
+  try{if(c.state==="suspended")c.resume();stopVoice();var s=c.createBufferSource();s.buffer=vbuf[id];s.connect(c.destination);s.start(0);vsrc=s;return true;}catch(e){return false;}
+}
+function speechId(t){for(var i=0;i<SPK.length;i++)if(SPK[i][0].test(t))return SPK[i][2]||"";return "";}
+function preloadVoices(){try{var seen={};SPK.forEach(function(x){if(x[2]&&!seen[x[2]]){seen[x[2]]=1;loadVoice(x[2]).catch(function(){});}});}catch(e){log("音声ファイルを読み込めません: "+e.message);}}
 var WORDS=[[/QR/g,"キューアール"],[/本人用/g,"じぶんの"],[/認証/g,"にんしょう"],[/下4桁/g,"しも よんけた"],[/通番/g,"つうばん"],[/枠/g,"わく"],[/読取/g,"よみとり"],[/記録/g,"きろく"],[/棚卸/g,"たなおろし"],[/[「」()()]/g," "]];
 function speechText(t){
   for(var i=0;i<SPK.length;i++)if(SPK[i][0].test(t))return SPK[i][1];
@@ -488,8 +516,10 @@ function loadOrders(){
 /* 第1.8版: 音声のON/OFF。iPhoneは最初にボタンを押したときでないと声が出ないので、最初のタップで準備する */
 function drawVoice(){$("voice").textContent=voiceOn?"音声 ON":"音声 OFF";$("voice").classList.toggle("off",!voiceOn);}
 drawVoice();
-$("voice").addEventListener("click",function(){voiceOn=!voiceOn;try{localStorage.setItem("pallet_voice",voiceOn?"on":"off");}catch(e){}drawVoice();if(voiceOn){lastSaid={};lastSayAt=0;say("音声の案内をオンにしました",true);}else if(window.speechSynthesis)speechSynthesis.cancel();});
+$("voice").addEventListener("click",function(){voiceOn=!voiceOn;try{localStorage.setItem("pallet_voice",voiceOn?"on":"off");}catch(e){}drawVoice();if(voiceOn){lastSaid={};lastSayAt=0;say("音声の案内をオンにしました",true);}else{stopVoice();if(window.speechSynthesis)speechSynthesis.cancel();}});
 var voiceReady=false;
+document.addEventListener("click",function(){var c=audioCtx();if(c&&c.state==="suspended")try{c.resume();}catch(e){}},true);   /* 第1.29版: 音声ファイルを鳴らせるようにする (iPhone はタップが要る) */
+preloadVoices();
 document.addEventListener("click",function(){if(voiceReady||!window.speechSynthesis)return;voiceReady=true;try{var u=new SpeechSynthesisUtterance(" ");u.volume=0;speechSynthesis.speak(u);}catch(e){}},true);
 $("logout").addEventListener("click",function(){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;ORDERS=null;setLogin("");});
 
@@ -1032,5 +1062,6 @@ var saved=null;try{saved=localStorage.getItem(TOKEN_KEY);}catch(e){}
 if(saved)tryToken(saved);else{setLogin("");setStatus("「開始」を押して、本人用の認証QRをカメラで撮影してください。");}
 })();
 </script>
+<div style="text-align:center;color:#888;font-size:11px;margin:18px 0 10px">音声: VOICEVOX:青山龍星</div>
 </body>
 </html>
