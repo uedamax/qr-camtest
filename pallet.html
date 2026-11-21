@@ -149,6 +149,9 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
 #busy .bar i.over{background:#f0b04c}
 /* 第1.27版: 版数をいつも見える所 (右上) に出す */
 #verBadge{position:fixed;top:calc(4px + env(safe-area-inset-top,0px));right:6px;z-index:70;background:rgba(20,32,43,.78);color:#fff;font-size:12px;font-weight:700;padding:2px 8px;border-radius:10px;pointer-events:none}
+/* 第1.28版: 裏で画像を送っている間だけ、版数の下に小さく出す (作業は止めない) */
+#upBadge{position:fixed;top:calc(28px + env(safe-area-inset-top,0px));right:6px;z-index:70;background:rgba(21,101,192,.85);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;pointer-events:none}
+#upBadge.hidden{display:none}
 .autonote{margin:4px 2px 0;color:var(--ok);font-weight:700}
 #toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;min-width:min(86vw,360px);max-width:94vw;padding:14px 18px;border-radius:12px;color:#fff;font-size:18px;font-weight:bold;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.35)}
 #toast.ok{background:#13804a}#toast.ng{background:#c62828}#toast.info{background:#14202b}
@@ -184,7 +187,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.27版 / 2026-11-18 / 版数を右上にいつも出す・パレットラベルを読むと自動で確認完了になることを画面に書く</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.28版 / 2026-11-21 / 画像は記録と別に、パレットの確認が終わってから裏で送る (記録を待たせない)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -271,6 +274,36 @@ function snap(kind){
     log("画像 "+(kind==="carton"?"カートンラベル":"パレットラベル")+" "+Math.round(photos[kind].length*0.75/1024)+"KB");
   }catch(e){log("画像を取れません: "+e.message);}
 }
+/* 第1.28版: 画像は記録と一緒に送らない。記録できた分の画像をパレットごとにためておき、
+   パレットの確認が終わったら (パレットラベルの QR・「確認して終了」・「次のパレット」) 裏で送る。作業は待たせない */
+var pend={serial:"",items:[]},upq=[],upBusy=false;
+function keepPhotos(sn,od){
+  ["carton","label"].forEach(function(k){if(photos[k])pend.items.push({kind:k,order:od||"",data:photos[k]});});
+  if(sn)pend.serial=sn;photos={};
+}
+function flushPhotos(){
+  if(pend.items.length&&pend.serial){upq.push({serial:pend.serial,items:pend.items,tries:0});log("画像を送る予定に入れました 通番 "+pend.serial+" "+pend.items.length+"枚");}
+  pend={serial:"",items:[]};upNext();
+}
+function upNext(){
+  drawUp();if(upBusy||!upq.length||!token)return;
+  upBusy=true;var job=upq[0];
+  fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"photos",token:token,serial:job.serial,items:job.items})})
+  .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
+  .then(function(j){if(!j.ok)throw new Error(j.error);upq.shift();upBusy=false;log("画像を保存しました 通番 "+job.serial+" "+j.saved+"枚");upNext();})
+  .catch(function(e){
+    upBusy=false;job.tries++;log("画像の送信に失敗 ("+job.tries+"回目): "+e.message);
+    if(job.tries>=5){upq.shift();log("画像の送信をやめました 通番 "+job.serial+" (記録は残っています)");}
+    drawUp();setTimeout(upNext,job.tries>=5?0:Math.min(60000,5000*job.tries));
+  });
+}
+function drawUp(){
+  var b=$("upBadge");if(!b)return;var n=0;upq.forEach(function(j){n+=j.items.length;});
+  b.textContent=n?("画像送信中 "+n+"枚"):"";b.classList.toggle("hidden",!n);
+}
+window.addEventListener("online",upNext);
+document.addEventListener("visibilitychange",function(){if(!document.hidden)upNext();});
+window.addEventListener("beforeunload",function(e){if(upq.length||pend.items.length){e.preventDefault();e.returnValue="";}});
 var stream=null,timer=null,busy=false,worker=null,workerReady=false,lastQuad=null,lastSeen=0;
 var token=null,userName="",ORDERS=null,SUMI=[];
 
@@ -686,7 +719,8 @@ function updateRings(){
   ring($("stage"),waitLabel);
 }
 var waitLabel=false;
-(function(){var v=(document.querySelector(".ver").textContent.match(/第[0-9.]+版/)||[""])[0];var b=document.createElement("div");b.id="verBadge";b.textContent=v;document.body.appendChild(b);})();
+(function(){var v=(document.querySelector(".ver").textContent.match(/第[0-9.]+版/)||[""])[0];var b=document.createElement("div");b.id="verBadge";b.textContent=v;document.body.appendChild(b);
+  var u=document.createElement("div");u.id="upBadge";u.className="hidden";document.body.appendChild(u);})();
 /* 第1.25版: 「確認した」にチェックした後 (記録前) と「パレットラベルを読む」の後は、パレットラベル用の枠にする */
 function labelMode(){var cb=$("confirmed");return waitLabel||(!!cb&&cb.checked&&!justSaved);}
 ["from","to"].forEach(function(id){$(id).addEventListener("input",check);});
@@ -702,11 +736,11 @@ $("save").addEventListener("click",function(){doSave();});
 function doSave(onDone){
   var b=$("save");$("saveStatus").textContent="記録中…";$("saveStatus").className="status";
   var sn=serial(),od=cur.order.order,fr=$("from").value,to=$("to").value;
-  api({action:"saveRange",serial:sn,order:od,from:+fr,to:+to,scanned:st.fixed.num||"",scanSrc:st.fixed.num?(st.manual.num?"手入力":"OCR"):"未読取",confirmed:$("confirmed").checked,qrId:st.pq?st.pq.id:"",note:$("note").value,photos:{carton:photos.carton||"",label:photos.label||""}},b,"記録中")
+  api({action:"saveRange",serial:sn,order:od,from:+fr,to:+to,scanned:st.fixed.num||"",scanSrc:st.fixed.num?(st.manual.num?"手入力":"OCR"):"未読取",confirmed:$("confirmed").checked,qrId:st.pq?st.pq.id:"",note:$("note").value},b,"記録中")
   .then(function(j){
     if(!j.ok)throw new Error(j.error);
-    photos={};   /* 送った画像は消す (同じパレットの次のオーダーで重ねて送らない) */
-    var pe=j.photoError?" / 画像は保存できませんでした":"";if(j.photoError)log("画像の保存に失敗: "+j.photoError);else if(j.photoLinks)log("画像を保存: "+j.photoLinks.split(" ").length+"枚");
+    keepPhotos(sn,od);   /* 第1.28版: 画像はためておき、パレットの確認が終わってから裏で送る */
+    var pe="";
     var head=(j.confirmed?"☑ 棚卸確認を記録しました":"記録しました(未確認)");
     $("saveStatus").textContent=head+" 通番 "+sn+" / "+od+" "+fr+"〜"+to+"(範囲内 "+j.inRange+" / "+j.sumiMatch+" / "+j._sec.toFixed(1)+"秒)"+pe;$("saveStatus").className="status ok";
     toast(head,"ok","通番 "+sn+" / "+od+" "+fr+"〜"+to+" / "+j._sec.toFixed(1)+"秒");
@@ -720,7 +754,7 @@ function doSave(onDone){
 var finishing=false,lastLabelQR="",lastLabelAt=0;
 function finishPallet(src){
   if(finishing)return;
-  if(justSaved){goNext();return;}                     /* 記録済みなら次のパレットへ進むだけ */
+  if(justSaved){keepPhotos(serial(),cur.order?cur.order.order:"");flushPhotos();goNext();return;}   /* 記録済みなら次のパレットへ進むだけ */
   var cb=$("confirmed");
   if(!cb.disabled&&!cb.checked){cb.checked=true;cb.dataset.key=(cur.order?cur.order.order:"")+"|"+(+$("from").value)+"|"+(+$("to").value);check();}
   if($("save").disabled){
@@ -742,7 +776,8 @@ function finishPallet(src){
       $("ordSel").scrollIntoView({block:"center",behavior:"smooth"});return;
     }
     setStatus("通番 "+sn+" の確認を終了しました","ok");
-    setTimeout(goNext,2600);                          /* 音声の案内が重ならないよう間を空ける */
+    flushPhotos();                                    /* 第1.28版: このパレットの画像を裏で送る */
+    setTimeout(goNext,2600);                         /* 音声の案内が重ならないよう間を空ける */
   });
 }
 /* パレットラベル(通番ラベル)のQR。MVP,01,通番,… / MVP,02,通番,… / 手書き用 MVPH,01,B番号 */
@@ -768,7 +803,7 @@ $("readLabel").addEventListener("click",function(){
 });
 function goNext(){$("next").click();}
 $("next").addEventListener("click",function(){
-  waitLabel=false;photos={};
+  waitLabel=false;flushPhotos();photos={};          /* 記録した分の画像は送り、記録していない画像は捨てる */
   $("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;$("save").textContent="記録する(未確認・差異あり)";
   cur={order:null,info:null};$("ordMeta").textContent="";$("sumiInfo").textContent="";$("otherRecs").innerHTML="";$("myRecs").innerHTML="";$("histBox").classList.add("hidden");$("saveStatus").textContent="";
   $("ordSel").innerHTML='<option value="">(QRを読むと候補が出ます)</option>';$("ordManual").value="";$("useSumi").classList.add("hidden");
