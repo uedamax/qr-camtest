@@ -152,6 +152,15 @@ button.working{opacity:1;background:#5b6875;border-color:#5b6875;color:#fff}
 /* 第1.28版: 裏で画像を送っている間だけ、版数の下に小さく出す (作業は止めない) */
 #upBadge{position:fixed;top:calc(28px + env(safe-area-inset-top,0px));right:6px;z-index:70;background:rgba(21,101,192,.85);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;pointer-events:none}
 #upBadge.hidden{display:none}
+/* 第1.30版: 決まりに外れたパレット (移管用パレットラベルの枠と同じ色) */
+#matchCard.sp-multi{border:6px solid #d00000}
+#matchCard.sp-harness{border:6px solid #1a8f2e}
+#matchCard.sp-fr{border:6px solid #1466bf}
+#matchCard.sp-tube{border:6px solid #000}
+#matchCard.sp-single{border:6px solid #f2c200}
+#spNote{color:#d00000;font-weight:900;font-size:min(9vw,36px);line-height:1.2;text-align:center;margin:2px 0 8px}
+#spNote small{display:block;font-size:min(4.6vw,18px);font-weight:800;margin-top:2px}
+#spNote.hidden{display:none}
 .autonote{margin:4px 2px 0;color:var(--ok);font-weight:700}
 #toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:60;min-width:min(86vw,360px);max-width:94vw;padding:14px 18px;border-radius:12px;color:#fff;font-size:18px;font-weight:bold;text-align:center;box-shadow:0 6px 20px rgba(0,0,0,.35)}
 #toast.ok{background:#13804a}#toast.ng{background:#c62828}#toast.info{background:#14202b}
@@ -187,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.29版 / 2026-11-21 / 音声の案内を VOICEVOX の声 (前もって作った音声) にする・画像はパレットの確認が終わってから裏で送る</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.30版 / 2026-11-21 / 複数オーダー・ハーネス・FR・Tube・1 箱だけのパレットを、色の枠と赤い大きな字で知らせる</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -212,6 +221,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
 
 <div class="panel match" id="matchCard">
  <h2>リストとの照合(ラベル・パレットのフィルムと見比べてください)</h2>
+ <div id="spNote" class="hidden"></div>
  <div id="matchBody">カートンラベルを読むと、リストの通番・オーダー・品名を表示します。</div>
 </div>
 
@@ -692,7 +702,30 @@ function serialOnly(){
 $("serialGo").addEventListener("click",function(){if(!ORDERS){setStatus("先に本人用の認証QRを読んでください。","ng");return;}if(!serial()){setStatus("通番を入れてから「決定」","ng");return;}serialAuto=false;loadInfo();serialOnly();});
 
 /* ---------- 範囲の判定 ---------- */
+/* 第1.30版: 決まりに外れたパレットは、照合の欄を色の枠で囲み、赤い大きな字で知らせる。
+   住友リスト (SUMI) の行数・備考の品名・箱数から決める (移管用パレットラベルの特記と同じ決め方) */
+function specialOf(sn){
+  if(!sn)return null;sn=String(Number(sn));
+  var rows=SUMI.filter(function(r){return r.serial===sn;});if(!rows.length)return null;
+  if(rows.length>1)return {cls:"sp-multi",big:"複数オーダー",small:"このパレットに "+rows.length+" オーダー("+rows.map(function(r){return r.order;}).join("・")+")。オーダーごとに確かめる"};
+  var item=(String(rows[0].note||"").split(" / ")[1]||"").trim();
+  if(item==="ハーネス")return {cls:"sp-harness",big:"ハーネス",small:"ヒーター線ではありません"};
+  if(item==="FR")return {cls:"sp-fr",big:"FR",small:"ヒーター線ではありません"};
+  if(/^tube$/i.test(item))return {cls:"sp-tube",big:"チューブ (Tube)",small:"ヒーター線ではありません"};
+  if(rows[0].from&&rows[0].to&&rows[0].from===rows[0].to)return {cls:"sp-single",big:"1 箱だけ",small:"このパレットは 1 箱のみ"};
+  return null;
+}
+var spKey="";
+function drawSpecial(){
+  var sn=serial()||(lastMatch&&lastMatch.hit&&lastMatch.hit.length===1?lastMatch.hit[0].serial:"");
+  var sp=specialOf(sn),card=$("matchCard"),el=$("spNote");
+  card.classList.remove("sp-multi","sp-harness","sp-fr","sp-tube","sp-single");
+  if(!sp){el.classList.add("hidden");spKey="";return;}
+  card.classList.add(sp.cls);el.innerHTML=esc(sp.big)+"<small>"+esc(sp.small)+"</small>";el.classList.remove("hidden");
+  var k=sn+"|"+sp.cls;if(k!==spKey){spKey=k;blink(el);}
+}
 function check(){
+  try{drawSpecial();}catch(e){}
   runMatch();
   var ul=$("checks"),items=[];var f=+$("from").value,t=+$("to").value;var o=cur.order;
   var valid=f>=1&&t<=99&&f<=t&&$("from").value!==""&&$("to").value!=="";
