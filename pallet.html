@@ -196,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.33版 / 2026-11-23 / テスト利用者1 (進行役) のときだけ「試験の記録を消す」ボタンを出す</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.34版 / 2026-11-23 / 音声を男性の声 (青山龍星) にそろえた。テスト利用者1 だけ「試験の記録を消す」ボタン</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -371,9 +371,18 @@ function say(t,urgent){
   if(!urgent&&now-lastSayAt<2500)return;            /* 案内が続けて変わるときは間を空ける */
   lastSaid[t]=now;lastSayAt=now;
   var vid=speechId(t);
-  if(vid){if(vbuf[vid]){try{speechSynthesis.cancel();}catch(e){}if(playVoice(vid))return;}else loadVoice(vid).catch(function(){});}
+  /* 第1.34版: 録音した男性の声 (青山龍星) がまだ読み込めていないときは、読み込みを待って鳴らす (女性の読み上げに切り替えない) */
+  if(vid){
+    if(vbuf[vid]){try{speechSynthesis.cancel();}catch(e){}if(playVoice(vid))return;}
+    else{var at=now;loadVoice(vid).then(function(){if(lastSayAt===at&&Date.now()-at<5000){try{speechSynthesis.cancel();}catch(e){}playVoice(vid);}})
+      .catch(function(){if(lastSayAt===at)sayTts(t);});return;}
+  }
+  sayTts(t);
+}
+/* 端末の読み上げ。録音の無い案内だけに使う。男性の声を選び、無ければ低い声にする (第1.34版) */
+function sayTts(t){
   stopVoice();
-  try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(speechText(t));u.lang="ja-JP";u.rate=1.0;u.pitch=1.0;var v=pickVoice();if(v)u.voice=v;speechSynthesis.speak(u);}catch(e){}
+  try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(speechText(t));u.lang="ja-JP";u.rate=1.0;var v=pickVoice();if(v)u.voice=v;u.pitch=(v&&MALE.test(v.name))?1.0:0.6;speechSynthesis.speak(u);}catch(e){}
 }
 /* 読み上げ用の文。漢字のままだと読み違える(本人用・下4桁・枠 など)ので、案内ごとに かな の文を持たせる。
    読点(、)と空白で区切ると、声の抑揚が自然になる。 */
@@ -439,14 +448,16 @@ function speechText(t){
   for(var i=0;i<SPK.length;i++)if(SPK[i][0].test(t))return SPK[i][1];
   var s=String(t);WORDS.forEach(function(w){s=s.replace(w[0],w[1]);});return s;
 }
-/* 日本語の声のうち、抑揚の自然なものを選ぶ(Windows の Natural 音声・Google・iPhone の Kyoko など) */
+/* 日本語の声のうち、男性の声を選ぶ (第1.34版。録音の声 青山龍星 に合わせる)。
+   Windows の Keita・Ichiro、iPhone の Otoya・Hattori、Android の男性の声 (jac・jad) */
 var voiceCache=null;
+var MALE=/Keita|Ichiro|Daichi|Naoki|Otoya|Hattori|ja-jp-x-ja[cd]|male/i;
 function pickVoice(){
   if(voiceCache)return voiceCache;
   var vs=(window.speechSynthesis&&speechSynthesis.getVoices())||[];
   var ja=vs.filter(function(v){return /^ja/i.test(v.lang);});
   if(!ja.length)return null;
-  var pref=[/Nanami.*Natural|Natural.*Nanami/i,/Natural/i,/Online/i,/Google/i,/Kyoko|O-ren|Otoya/i,/Haruka|Nanami/i];
+  var pref=[/Keita.*Natural|Natural.*Keita/i,/Keita|Daichi|Naoki/i,/Otoya|Hattori/i,/Ichiro/i,/ja-jp-x-ja[cd]/i,/\bmale/i,/Natural/i,/Google/i];
   for(var i=0;i<pref.length;i++){var h=ja.filter(function(v){return pref[i].test(v.name);})[0];if(h){voiceCache=h;return h;}}
   voiceCache=ja[0];return voiceCache;
 }
@@ -530,7 +541,7 @@ function drawVoice(){$("voice").textContent=voiceOn?"音声 ON":"音声 OFF";$("
 drawVoice();
 $("voice").addEventListener("click",function(){voiceOn=!voiceOn;try{localStorage.setItem("pallet_voice",voiceOn?"on":"off");}catch(e){}drawVoice();if(voiceOn){lastSaid={};lastSayAt=0;say("音声の案内をオンにしました",true);}else{stopVoice();if(window.speechSynthesis)speechSynthesis.cancel();}});
 var voiceReady=false;
-document.addEventListener("click",function(){var c=audioCtx();if(c&&c.state==="suspended")try{c.resume();}catch(e){}},true);   /* 第1.29版: 音声ファイルを鳴らせるようにする (iPhone はタップが要る) */
+document.addEventListener("click",function(){var c=audioCtx();if(c&&c.state==="suspended")try{c.resume();}catch(e){}preloadVoices();},true);   /* 第1.34版: 読み込めなかった声は、タップのときに読み込み直す */   /* 第1.29版: 音声ファイルを鳴らせるようにする (iPhone はタップが要る) */
 preloadVoices();
 document.addEventListener("click",function(){if(voiceReady||!window.speechSynthesis)return;voiceReady=true;try{var u=new SpeechSynthesisUtterance(" ");u.volume=0;speechSynthesis.speak(u);}catch(e){}},true);
 /* 第1.33版: テスト利用者1 (進行役) だけ、試験の記録 (試験用の利用者の分) をまとめて消して最初からにする */
