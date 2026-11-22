@@ -196,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.33版 / 2026-11-23 / 試験用の利用者でログインしたとき「試験の記録を消す」ボタンを出す</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.33版 / 2026-11-23 / テスト利用者1 (進行役) のときだけ「試験の記録を消す」ボタンを出す</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -504,7 +504,7 @@ function api(body,btn,btnText){
 function setLogin(name){
   userName=name||"";$("who").textContent=name?("担当: "+name):"未ログイン(本人用の認証QRを読んでください)";
   $("logout").classList.toggle("hidden",!name);
-  $("resetTest").classList.toggle("hidden",!/^(試験用|テスト利用者)/.test(userName));
+  $("resetTest").classList.toggle("hidden",userName!=="テスト利用者1");   /* 消せるのは進行役の 1 人だけ */
   if(typeof updateRings==="function")updateRings();
 }
 function tryToken(t){
@@ -533,7 +533,7 @@ var voiceReady=false;
 document.addEventListener("click",function(){var c=audioCtx();if(c&&c.state==="suspended")try{c.resume();}catch(e){}},true);   /* 第1.29版: 音声ファイルを鳴らせるようにする (iPhone はタップが要る) */
 preloadVoices();
 document.addEventListener("click",function(){if(voiceReady||!window.speechSynthesis)return;voiceReady=true;try{var u=new SpeechSynthesisUtterance(" ");u.volume=0;speechSynthesis.speak(u);}catch(e){}},true);
-/* 第1.33版: 試験用の利用者だけ、試験の記録 (試験用の利用者の分) をまとめて消して最初からにする */
+/* 第1.33版: テスト利用者1 (進行役) だけ、試験の記録 (試験用の利用者の分) をまとめて消して最初からにする */
 $("resetTest").addEventListener("click",function(){
   var b=this;
   if(!confirm("試験の記録 (試験用1〜8・テスト利用者1 の分) を全部消して、最初からにします。本番の記録は消えません。よろしいですか。"))return;
