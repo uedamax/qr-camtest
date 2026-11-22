@@ -196,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.35版 / 2026-11-23 / 確認済みの通番を記録するときは「もう一度記録しますか」と聞く (GAS 第2.10版)</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.36版 / 2026-11-23 / 声は録音した男性の声 (青山龍星) だけにした (端末の読み上げを使わない)。確認済みの通番は「もう一度記録しますか」と聞く</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -365,24 +365,18 @@ function fitLine(el){if(!el)return;el.style.fontSize="";var fs=18;el.style.fontS
 window.addEventListener("resize",function(){fitLine($("hudMsg"));});
 function isProgress(t){return /…|\d+ms|\d+px/.test(t);} /* 途中経過(毎コマ変わる表示)は点滅・音声の対象外 */
 function say(t,urgent){
-  if(!voiceOn||!window.speechSynthesis||!t)return;
+  if(!voiceOn||!t)return;
   var now=Date.now();
   if(lastSaid[t]&&now-lastSaid[t]<8000)return;      /* 同じ案内は8秒以内に繰り返さない */
   if(!urgent&&now-lastSayAt<2500)return;            /* 案内が続けて変わるときは間を空ける */
   lastSaid[t]=now;lastSayAt=now;
   var vid=speechId(t);
   /* 第1.34版: 録音した男性の声 (青山龍星) がまだ読み込めていないときは、読み込みを待って鳴らす (女性の読み上げに切り替えない) */
-  if(vid){
-    if(vbuf[vid]){try{speechSynthesis.cancel();}catch(e){}if(playVoice(vid))return;}
-    else{var at=now;loadVoice(vid).then(function(){if(lastSayAt===at&&Date.now()-at<5000){try{speechSynthesis.cancel();}catch(e){}playVoice(vid);}})
-      .catch(function(){if(lastSayAt===at)sayTts(t);});return;}
-  }
-  sayTts(t);
-}
-/* 端末の読み上げ。録音の無い案内だけに使う。男性の声を選び、無ければ低い声にする (第1.34版) */
-function sayTts(t){
-  stopVoice();
-  try{speechSynthesis.cancel();var u=new SpeechSynthesisUtterance(speechText(t));u.lang="ja-JP";u.rate=1.0;var v=pickVoice();if(v)u.voice=v;u.pitch=(v&&MALE.test(v.name))?1.0:0.6;speechSynthesis.speak(u);}catch(e){}
+  /* 第1.36版: 端末の読み上げ (スマホに男性の声が無いと女性の声になる) は使わない。録音した男性の声 (青山龍星) だけを鳴らす。
+     録音の無い案内は鳴らさない (画面の表示だけ)。読み込みに失敗したときも鳴らさない */
+  if(!vid){log("音声なし (録音が無い案内): "+t);return;}
+  if(vbuf[vid]){playVoice(vid);return;}
+  var at=now;loadVoice(vid).then(function(){if(lastSayAt===at&&Date.now()-at<5000)playVoice(vid);}).catch(function(){log("音声を読み込めません: "+vid);});
 }
 /* 読み上げ用の文。漢字のままだと読み違える(本人用・下4桁・枠 など)ので、案内ごとに かな の文を持たせる。
    読点(、)と空白で区切ると、声の抑揚が自然になる。 */
@@ -418,11 +412,19 @@ var SPK=[
   [/^通番を入れてから/,"つうばんを いれてから、けってい を おしてください。","needserial"],
   [/^パレットラベル全体を白い枠/,"パレットラベルの ぜんたいを、しろい わくに あわせてください。","pallet"],
   [/^通番 \d+ の残り/,"この パレットには、まだ ほかの オーダーが あります。のこりの オーダーを えらんで、きろく してください。","rest"],
-  [/^記録に失敗しました/,"きろくに、しっぱい しました。もういちど おしてください。","recfail"]
+  [/^記録に失敗しました/,"きろくに、しっぱい しました。もういちど おしてください。","recfail"],
+  /* 第1.36版: 録音を足した案内 */
+  [/^確認済みの通番/,"この つうばんは、もう かくにんずみです。","already"],
+  [/^記録しませんでした/,"きろく しませんでした。","notsaved"],
+  [/^消せませんでした/,"しけんの きろくを、けせませんでした。","resetfail"],
+  [/^取消に失敗/,"とりけしに、しっぱい しました。","unconffail"],
+  [/^文字認識の準備に失敗/,"もじにんしきの じゅんびに、しっぱい しました。","ocrfail"],
+  [/^通番の情報を取得できません/,"つうばんの じょうほうを、しゅとく できませんでした。","infofail"],
+  [/^通番を入れてください/,"つうばんを、いれてください。","entserial"]
 ];
 /* 第1.29版: 決まった案内は、VOICEVOX で前もって作った音声 (voice/<ID>.mp3) を鳴らす。
    まだ読み込めていない・鳴らせないときは、これまでどおり端末の読み上げ (上の かな の文) を使う */
-var VOICE_VER="1",actx=null,vbuf={},vload={},vsrc=null;
+var VOICE_VER="2",actx=null,vbuf={},vload={},vsrc=null;
 function audioCtx(){
   if(!actx){var C=window.AudioContext||window.webkitAudioContext;if(C)try{actx=new C();}catch(e){}
     try{if(navigator.audioSession)navigator.audioSession.type="playback";}catch(e){}}   /* iPhone のマナーモードでも鳴らす */
@@ -543,7 +545,7 @@ $("voice").addEventListener("click",function(){voiceOn=!voiceOn;try{localStorage
 var voiceReady=false;
 document.addEventListener("click",function(){var c=audioCtx();if(c&&c.state==="suspended")try{c.resume();}catch(e){}preloadVoices();},true);   /* 第1.34版: 読み込めなかった声は、タップのときに読み込み直す */   /* 第1.29版: 音声ファイルを鳴らせるようにする (iPhone はタップが要る) */
 preloadVoices();
-document.addEventListener("click",function(){if(voiceReady||!window.speechSynthesis)return;voiceReady=true;try{var u=new SpeechSynthesisUtterance(" ");u.volume=0;speechSynthesis.speak(u);}catch(e){}},true);
+/* 第1.36版: 端末の読み上げは使わないので、その準備 (無音の読み上げ) もやめた */
 /* 第1.33版: テスト利用者1 (進行役) だけ、試験の記録 (試験用の利用者の分) をまとめて消して最初からにする */
 $("resetTest").addEventListener("click",function(){
   var b=this;
@@ -828,9 +830,10 @@ function doSave(onDone,force){
     /* 第1.35版: ほかの人 (または自分) がもう棚卸確認済みなら、記録の前に聞く */
     if(!j.ok&&j.error==="already_confirmed"){
       var t=String(j.at||"").slice(11,16);
+      say("確認済みの通番",true);
       if(confirm("通番 "+sn+" / "+od+" は、"+j.by+" が "+t+" に棚卸確認済みです ("+j.from+"〜"+j.to+")。\nもう一度記録しますか？")){doSave(onDone,true);return;}
       $("saveStatus").textContent="記録しませんでした (通番 "+sn+" は "+j.by+" が確認済み)";$("saveStatus").className="status";
-      toast("記録しませんでした","info","通番 "+sn+" は "+j.by+" が "+t+" に確認済みです");
+      toast("記録しませんでした","info","通番 "+sn+" は "+j.by+" が "+t+" に確認済みです");say("記録しませんでした",true);
       loadInfo();check();if(onDone)onDone(false);return;
     }
     if(!j.ok)throw new Error(j.error);
