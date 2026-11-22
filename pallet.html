@@ -196,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.34版 / 2026-11-23 / 音声を男性の声 (青山龍星) にそろえた。テスト利用者1 だけ「試験の記録を消す」ボタン</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.35版 / 2026-11-23 / 確認済みの通番を記録するときは「もう一度記録しますか」と聞く (GAS 第2.10版)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -820,11 +820,19 @@ function unsave(){if(justSaved){justSaved=null;check();}}
 ["confirmed","ordSel"].forEach(function(id){$(id).addEventListener("change",unsave);});
 $("save").addEventListener("click",function(){doSave();});
 /* 第1.16版: 記録の処理を関数にし、パレットラベルの読み取り・「確認して終了」ボタンからも使う。onDone(成功したか) */
-function doSave(onDone){
+function doSave(onDone,force){
   var b=$("save");$("saveStatus").textContent="記録中…";$("saveStatus").className="status";
   var sn=serial(),od=cur.order.order,fr=$("from").value,to=$("to").value;
-  api({action:"saveRange",serial:sn,order:od,from:+fr,to:+to,scanned:st.fixed.num||"",scanSrc:st.fixed.num?(st.manual.num?"手入力":"OCR"):"未読取",confirmed:$("confirmed").checked,qrId:st.pq?st.pq.id:"",note:$("note").value},b,"記録中")
+  api({action:"saveRange",serial:sn,order:od,from:+fr,to:+to,scanned:st.fixed.num||"",scanSrc:st.fixed.num?(st.manual.num?"手入力":"OCR"):"未読取",confirmed:$("confirmed").checked,qrId:st.pq?st.pq.id:"",note:$("note").value,force:!!force},b,"記録中")
   .then(function(j){
+    /* 第1.35版: ほかの人 (または自分) がもう棚卸確認済みなら、記録の前に聞く */
+    if(!j.ok&&j.error==="already_confirmed"){
+      var t=String(j.at||"").slice(11,16);
+      if(confirm("通番 "+sn+" / "+od+" は、"+j.by+" が "+t+" に棚卸確認済みです ("+j.from+"〜"+j.to+")。\nもう一度記録しますか？")){doSave(onDone,true);return;}
+      $("saveStatus").textContent="記録しませんでした (通番 "+sn+" は "+j.by+" が確認済み)";$("saveStatus").className="status";
+      toast("記録しませんでした","info","通番 "+sn+" は "+j.by+" が "+t+" に確認済みです");
+      loadInfo();check();if(onDone)onDone(false);return;
+    }
     if(!j.ok)throw new Error(j.error);
     keepPhotos(sn,od);   /* 第1.28版: 画像はためておき、パレットの確認が終わってから裏で送る */
     var pe="";
