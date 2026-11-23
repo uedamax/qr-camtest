@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.10版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す)
+  パレット確認 簡易版 第1.11版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す。1.11: 済んだらやることを消す)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (OK で次へ)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -28,6 +28,7 @@ body{margin:0;font-family:system-ui,-apple-system,"Hiragino Sans","BIZ UDPGothic
 #ov{position:absolute;left:0;top:0;width:100%;height:100%}
 #todo{margin:0 0 6px;padding:10px 12px;font-size:23px;font-weight:bold;line-height:1.3;background:#ffd43b;color:#111}
 #todo small{display:block;font-size:13px;color:#555}
+#todo.done{background:#333;color:#333}
 #say{margin:0;padding:10px 12px;font-size:20px;font-weight:bold;line-height:1.35;background:#222;color:#ccc;min-height:48px}
 #say.ng{background:#e03131;color:#fff}
 #say.ok{background:#2f9e44;color:#fff}
@@ -74,7 +75,7 @@ button.warn{background:#fd7e14;color:#111}
 </div>
 <div id="toast" class="hidden" style="position:fixed;left:8px;right:8px;top:8px;background:#2f9e44;color:#fff;font-weight:bold;font-size:18px;padding:10px;border-radius:10px;z-index:8;text-align:center"></div>
 <div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button><button id="dlgNo" class="hidden" style="background:#868e96;margin-top:10px;width:100%;font-size:22px">もう一度確認する</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.10版 / 2026-11-23 (やること=上の黄色、結果=下) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="foot">パレット確認 簡易版 第1.11版 / 2026-11-23 (やること=上の黄色・済んだら消す、結果=下) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -103,10 +104,10 @@ function setStep(n){
   stepMsg();if(n===1)voice("qrnear");if(n===2){voice("pullback");s2At=Date.now();}
 }
 /* 第1.8版: 区切りごとに緑で伝えてから次へ (その間は読み取りを止める) */
-function flash(t,then){paused=true;say(t,"ok");setTimeout(function(){paused=false;if(then)then();},1300);}   /* 結果は次の手順でも残す (上書きされるまで) */
+function flash(t,then){paused=true;clearTodo();say(t,"ok");setTimeout(function(){paused=false;if(then)then();},1300);}   /* 結果は次の手順でも残す (上書きされるまで) */
 function toast(t){var d=$("toast");d.textContent=t;d.classList.remove("hidden");clearTimeout(d._t);d._t=setTimeout(function(){d.classList.add("hidden");},3000);}
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
-function dialog(msg,next,okLabel,noLabel,noFn){$("dlgMsg").innerHTML=msg;$("dlg").classList.remove("hidden");paused=true;
+function dialog(msg,next,okLabel,noLabel,noFn){clearTodo();$("dlgMsg").innerHTML=msg;$("dlg").classList.remove("hidden");paused=true;
   $("dlgOk").textContent=okLabel||"OK";$("dlgNo").classList.toggle("hidden",!noLabel);if(noLabel)$("dlgNo").textContent=noLabel;
   $("dlgOk").onclick=function(){$("dlg").classList.add("hidden");paused=false;if(next)next();};
   $("dlgNo").onclick=function(){$("dlg").classList.add("hidden");paused=false;if(noFn)noFn();};}
@@ -286,7 +287,9 @@ function finish(sn,note){
 var QNAME={auth:"認証 QR",carton:"カートンラベルの QR",pallet:"パレットラベルの QR",other:"対象外の QR"},hintT=null;
 /* 第1.10版: やること (上・黄色) と、結果 (下・緑か赤) を分けて出す */
 var TODO={0:"ログインの QR (認証 QR) を緑の枠に",1:"カートンラベルの QR を緑の枠に近づける",2:"少し離して、カートンラベル全体を白い枠に",3:"パレットの箱を数え、合っていれば下のボタン",4:"パレットラベルの QR を緑の枠に",5:"OK を押す"};
-function stepMsg(){var n=["","①","②","③","④",""][STEP]||"";$("todo").innerHTML="<small>やること</small>"+(n?n+" ":"")+TODO[STEP];}
+function stepMsg(){var n=["","①","②","③","④",""][STEP]||"";$("todo").className="";$("todo").innerHTML="<small>やること</small>"+(n?n+" ":"")+TODO[STEP];}
+/* 第1.11版: やることが済んだら、やることの欄を消す (済んだかどうかを分かりやすく) */
+function clearTodo(){$("todo").className="done";$("todo").innerHTML="<small>やること</small>&nbsp;";}
 function hint(t){var st0=STEP;say(t,"ng");if(hintT)clearTimeout(hintT);hintT=setTimeout(function(){hintT=null;if(STEP===st0)say("","");},2500);}
 /* ---------- 毎フレーム ---------- */
 function tick(){
