@@ -196,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.42版 / 2026-11-23 / 映像が 2 秒止まったらカメラを自動で入れ直す。終了の記録は裏で送り待たせない。今やることを映像の上に大きく (① → ② → ③)</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.43版 / 2026-11-23 / 全員を一度ログアウト (ログインを覚える場所を変えた)。前の版: 映像が 2 秒止まったらカメラを自動で入れ直す。終了の記録は裏で送り待たせない。今やることを映像の上に大きく (① → ② → ③)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -270,7 +270,8 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
 (function(){
 "use strict";
 var API="https://script.google.com/macros/s/AKfycbx5pITwYiVGCI6RGgZGdbF_imkfet5Snqv1shg0l6ycgdq2PTSjTTyJkpzPV4P45PaVlQ/exec";
-var TOKEN_KEY="qr_lookup_token_v1";
+var TOKEN_KEY="qr_lookup_token_v2";   /* 2026-11-23: 覚える場所を v2 に変えて、全員を一度ログアウトさせた (認証 QR はそのまま) */
+try{localStorage.removeItem("qr_lookup_token_v1");}catch(e){}
 var $=function(id){return document.getElementById(id);};
 var video=$("video"),ov=$("ov"),octx=ov.getContext("2d");
 var full=document.createElement("canvas"),fctx=full.getContext("2d",{willReadFrequently:true});
