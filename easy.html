@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.0版 (2026-11-23)
+  パレット確認 簡易版 第1.1版 (2026-11-23。第1.0版から ③ にオーム数を出す)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (OK で次へ)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -63,14 +63,15 @@ button.warn{background:#fd7e14;color:#111}
   <!-- ③ 箱の数を確かめる -->
   <div id="count" class="hidden">
     <div class="sub">通番</div>
-    <div class="row"><input id="cSerial" inputmode="numeric" maxlength="4" style="width:4.2em;font-size:40px"><span id="cOrder" class="mid"></span></div>
+    <div class="row"><input id="cSerial" inputmode="numeric" maxlength="4" style="width:4.2em;font-size:40px"><span id="cOhm" class="big"></span></div>
+    <div class="row"><span id="cOrder" class="mid"></span></div>
     <div class="sub">カートン番号 (このパレット)</div>
     <div class="row"><input id="cFrom" inputmode="numeric" maxlength="2"><span class="mid">〜</span><input id="cTo" inputmode="numeric" maxlength="2"><span id="cN" class="big"></span></div>
     <button id="cOk" class="go">数が合っている → パレットラベルへ</button>
   </div>
 </div>
 <div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.0版 / 2026-11-23 / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="foot">パレット確認 簡易版 第1.1版 / 2026-11-23 (③ にオーム数) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -235,7 +236,7 @@ function decide(num,ord){
   var n=+num,rows=SUMI.filter(function(r){return r.order===o.order;}),hit=rows.filter(function(r){return r.from&&r.to&&n>=r.from&&n<=r.to;})[0];
   if(!hit){say("箱 "+num+" の通番がリストに無い","ng");$("manual").classList.remove("hidden");return;}
   cur.order=o;cur.row=hit;
-  $("cSerial").value=hit.serial;$("cOrder").textContent=o.order;$("cFrom").value=hit.from;$("cTo").value=hit.to;showN();
+  $("cSerial").value=hit.serial;$("cOrder").textContent=o.order;$("cOhm").textContent=(cur.pq&&cur.pq.name)||o.item||"";   /* 第1.1版: オーム数も出す */$("cFrom").value=hit.from;$("cTo").value=hit.to;showN();
   setStep(3);
 }
 function showN(){var f=+$("cFrom").value,t=+$("cTo").value;$("cN").textContent=(f&&t&&t>=f)?(t-f+1)+" 箱":"";}
