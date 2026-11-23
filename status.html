@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>パレット確認 状況</title>
 <!--
-  パレット確認 状況確認 第1.4版 (2026-11-23。1.1: スマホの幅に収める。1.2: 最初は未確認・一部だけ、50 番ごとの飛び先、先頭へ戻る。1.3: ログアウトして認証 QR で入り直せる。1.4: 最初は便ごと・すべて、切り替えの帯を上に残す)
+  パレット確認 状況確認 第1.5版 (2026-11-23。1.1: スマホの幅に収める。1.2: 最初は未確認・一部だけ、50 番ごとの飛び先、先頭へ戻る。1.3: ログアウトして認証 QR で入り直せる。1.4: 最初は便ごと・すべて、切り替えの帯を上に残す。1.5: 終わりの見込み (管理者だけ。休憩は GAS 第2.12版の breaks))
   通番ごと・便ごとに、確認が終わったか・だれが・いつを見る。通番を押すと詳細 (オーダーごと・記録の履歴・写真)。
   スマホはカードの一覧、PC (幅 900px 以上) は 1080p 向けの表と便の格子。
   確認の状態を変えられるのは管理者だけ (GAS 第2.11版の adminSet)。認証は pallet.html・easy.html と同じ認証 QR。
@@ -27,6 +27,9 @@ button.on{background:#ffd43b;color:#212529}
 #bar{height:14px;background:#495057;border-radius:7px;overflow:hidden;margin-top:6px}
 #bar div{height:100%;background:#2f9e44}
 #sum{font-size:14px;margin-top:4px}
+.eta{background:#fff;border-radius:10px;padding:14px;max-width:640px}.etaBig{font-size:40px;font-weight:bold;color:#7048e8}.etaL{font-size:16px;color:#495057;font-weight:bold}
+.etaT{border-collapse:collapse;margin-top:12px;width:100%}.etaT th,.etaT td{border-bottom:1px solid #dee2e6;padding:6px 4px;text-align:left;font-size:15px}.eta .etaT th{color:#495057;font-weight:normal;background:none;position:static;width:45%}
+.brow{display:flex;gap:6px;align-items:center;margin:4px 0}.brow input{font-size:18px;padding:4px;width:auto}
 #tools{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:#dee2e6;position:sticky;top:0;z-index:4}
 input,select,textarea{background:#ffa94d;color:#111;border:2px solid #fd7e14;border-radius:8px;font:inherit;font-weight:bold;padding:6px 8px}
 #q{width:9em}
@@ -75,7 +78,7 @@ td.sn{font-weight:bold;font-size:16px}
 </head>
 <body>
 <header>
-  <div class="hrow"><h1>パレット確認 状況</h1><span id="ver" class="tag">状況 1.4</span><span id="who" class="tag">未ログイン</span><span class="sp"></span><span id="upd"></span><button id="reload">更新</button><button id="logout" class="hidden" style="background:#c92a2a">ログアウト</button></div>
+  <div class="hrow"><h1>パレット確認 状況</h1><span id="ver" class="tag">状況 1.5</span><span id="who" class="tag">未ログイン</span><span class="sp"></span><span id="upd"></span><button id="reload">更新</button><button id="logout" class="hidden" style="background:#c92a2a">ログアウト</button></div>
   <div id="bar"><div style="width:0"></div></div>
   <div id="sum"></div>
 </header>
@@ -88,7 +91,7 @@ td.sn{font-weight:bold;font-size:16px}
 </div>
 <div id="app" class="hidden">
   <div id="tools">
-    <button id="tSerial">通番ごと</button><button id="tTrip" class="on">便ごと</button>
+    <button id="tSerial">通番ごと</button><button id="tTrip" class="on">便ごと</button><button id="tEta" class="hidden" style="background:#7048e8">終わりの見込み</button>
     <span class="sp"></span>
     <select id="flt"><option value="" selected>すべて</option><option value="notdone">未確認・一部</option><option value="none">未確認</option><option value="part">一部</option><option value="done">確認済み</option></select>
     <input id="q" placeholder="通番・オーダー">
@@ -114,7 +117,7 @@ function login(t){
   post({action:"whoami"}).then(function(j){
     if(!j.ok){token=null;$("lmsg").textContent="この認証は使えません";showLogin();return;}
     try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}
-    admin=!!j.admin;$("who").textContent="ログイン中: "+j.name+(admin?" (管理者)":"");$("who").style.background="#2f9e44";
+    admin=!!j.admin;$("tEta").classList.toggle("hidden",!admin);if(!admin&&VIEW==="eta")VIEW="trip";$("who").textContent="ログイン中: "+j.name+(admin?" (管理者)":"");$("who").style.background="#2f9e44";
     $("login").classList.add("hidden");$("app").classList.remove("hidden");$("logout").classList.remove("hidden");stopCam();load();
   }).catch(function(){token=null;$("lmsg").textContent="通信エラー";showLogin();});
 }
@@ -139,7 +142,7 @@ function load(){
   .catch(function(e){$("upd").textContent="読み込めません ("+e.message+")";});
 }
 $("reload").onclick=load;
-setInterval(function(){if(token&&$("det").classList.contains("hidden"))load();},60000);   /* 1 分ごとに読み直す (詳細を見ている間は止める) */
+setInterval(function(){if(token&&$("det").classList.contains("hidden")&&!(document.activeElement&&document.activeElement.closest&&document.activeElement.closest("#brk")))load();},60000);   /* 1 分ごとに読み直す (詳細を見ている間は止める) */
 function tripOf(note){return String(note||"").split(" / ")[0]||"(便なし)";}
 function itemOf(note){return String(note||"").split(" / ")[1]||"";}
 function build(){
@@ -162,6 +165,7 @@ function pass(o){var f=$("flt").value,q=$("q").value.trim().toUpperCase();
   if(q&&String(o.serial).indexOf(q.replace(/^0+/,""))!==0&&!o.orders.some(function(x){return x.order.toUpperCase().indexOf(q)>=0;}))return false;return true;}
 function when(r){return r?r.at.slice(5,16).replace("-","/"):"";}
 function render(){
+  if(VIEW==="eta"){renderEta();$("jump").style.display="none";return;}
   var list=Object.keys(SER).map(function(s){return SER[s];}).sort(function(a,b){return a.serial-b.serial;}).filter(pass);
   var h="";
   if(VIEW==="serial"){
@@ -187,8 +191,55 @@ function render(){
 function stick(){var hh=document.querySelector("header").offsetHeight;$("tools").style.top=hh+"px";$("jump").style.top=(hh+$("tools").offsetHeight)+"px";}
 window.addEventListener("resize",stick);
 $("toTop").onclick=function(){window.scrollTo({top:0,behavior:"smooth"});};
-$("tSerial").onclick=function(){VIEW="serial";this.classList.add("on");$("tTrip").classList.remove("on");render();};
-$("tTrip").onclick=function(){VIEW="trip";this.classList.add("on");$("tSerial").classList.remove("on");render();};
+function setView(v){VIEW=v;$("tSerial").classList.toggle("on",v==="serial");$("tTrip").classList.toggle("on",v==="trip");$("tEta").classList.toggle("on",v==="eta");
+  $("flt").style.display=$("q").style.display=v==="eta"?"none":"";if(v==="eta")loadBreaks();else render();}
+$("tSerial").onclick=function(){setView("serial");};
+$("tTrip").onclick=function(){setView("trip");};
+$("tEta").onclick=function(){setView("eta");};
+/* ---------- 第1.5版: 終わりの見込み (管理者だけ)。今日の最初の記録から今までのペースで、残りが終わる時刻を出す。休憩は全体で 1 組 (サーバに覚える) ---------- */
+var BREAKS=[],brkLoaded=false;
+function loadBreaks(){post({action:"breaks"}).then(function(j){if(j.ok){BREAKS=j.breaks||[];brkLoaded=true;}renderEta();}).catch(function(){renderEta();});}
+function hm2m(t){var m=/^(\d{1,2}):(\d{2})/.exec(t||"");return m?(+m[1])*60+(+m[2]):null;}
+function m2hm(m){m=Math.round(m);var d=Math.floor(m/1440);m-=d*1440;return (d?"翌日 ":"")+Math.floor(m/60)+":"+("0"+m%60).slice(-2);}
+function dur(m){m=Math.max(0,Math.round(m));return (m>=60?Math.floor(m/60)+" 時間 ":"")+(m%60)+" 分";}
+function brkIn(a,b){return BREAKS.reduce(function(t,x){var s=hm2m(x.s),e=hm2m(x.e);return t+Math.max(0,Math.min(b,e)-Math.max(a,s));},0);}
+function etaCalc(){
+  var nowD=new Date(),today=nowD.getFullYear()+"-"+("0"+(nowD.getMonth()+1)).slice(-2)+"-"+("0"+nowD.getDate()).slice(-2),nm=nowD.getHours()*60+nowD.getMinutes()+nowD.getSeconds()/60;
+  var recs=DATA.records.filter(function(r){return r.at.slice(0,10)===today&&r.kind!=="取消";});
+  var all=Object.keys(SER).length,done=Object.keys(SER).filter(function(k){return SER[k].st==="done";}),doneT=done.filter(function(k){return SER[k].last&&SER[k].last.at.slice(0,10)===today;}).length;
+  var r={today:today,now:nm,all:all,done:done.length,doneT:doneT,rest:all-done.length,start:null};
+  if(!recs.length)return r;
+  r.start=hm2m(recs.reduce(function(a,x){return x.at<a?x.at:a;},recs[0].at).slice(11,16));
+  r.work=(nm-r.start)-brkIn(r.start,nm);
+  if(r.work>0&&doneT>0){r.pace=doneT/r.work;r.need=r.rest/r.pace;
+    var t=nm,need=r.need,bs=BREAKS.map(function(x){return {s:hm2m(x.s),e:hm2m(x.e)};}).sort(function(a,b){return a.s-b.s;});
+    bs.forEach(function(b){if(need<=0||b.e<=t)return;if(b.s>t){if(need<=b.s-t)return;need-=b.s-t;}t=Math.max(t,b.e);});
+    r.end=need>0?t+need:t;if(r.rest===0)r.end=nm;}
+  return r;
+}
+function renderEta(){
+  if(!DATA){$("main").innerHTML="読み込み中…";return;}
+  var r=etaCalc(),h='<div class="eta">';
+  if(r.rest===0)h+='<div class="etaBig">全部確認済みです</div>';
+  else if(r.start==null)h+='<div class="etaBig">今日 ('+r.today.slice(5).replace("-","/")+') の記録はまだありません</div><div>最初の記録の時刻を開始として計算します。</div>';
+  else if(!r.pace)h+='<div class="etaBig">まだ計算できません</div><div>今日確認済みになったパレットが出ると計算します。</div>';
+  else h+='<div class="etaL">終わりの見込み</div><div class="etaBig">'+m2hm(r.end)+' ごろ</div><div class="etaL">あと '+dur(r.end-r.now)+' (休憩込み)</div>';
+  h+='<table class="etaT"><tr><th>開始 (今日の最初の記録)</th><td>'+(r.start!=null?m2hm(r.start):"-")+'</td></tr>'+
+    '<tr><th>確認済み / 全部</th><td>'+r.done+' / '+r.all+' パレット (今日 '+r.doneT+')</td></tr>'+
+    '<tr><th>残り</th><td>'+r.rest+' パレット</td></tr>'+
+    '<tr><th>作業した時間 (休憩を除く)</th><td>'+(r.work!=null?dur(r.work):"-")+'</td></tr>'+
+    '<tr><th>ペース</th><td>'+(r.pace?(r.pace*60).toFixed(1)+' パレット / 時間':"-")+'</td></tr>'+
+    '<tr><th>残りの作業時間 (休憩を除く)</th><td>'+(r.need!=null?dur(r.need):"-")+'</td></tr></table>';
+  h+='<h3 style="margin:16px 0 6px">休憩時間 (全体で共通)</h3><div id="brk">'+(brkLoaded?"":'<div style="color:#c92a2a">休憩時間を読めません</div>')+
+    BREAKS.map(function(b,i){return '<div class="brow"><input type="time" data-i="'+i+'" data-k="s" value="'+esc(b.s)+'"> 〜 <input type="time" data-i="'+i+'" data-k="e" value="'+esc(b.e)+'"><button data-del="'+i+'" style="background:#868e96">削除</button></div>';}).join("")+
+    '</div><div style="display:flex;gap:8px;margin-top:8px"><button id="bAdd">休憩を足す</button><button id="bSave" style="background:#1c7ed6">保存</button><span id="bMsg" style="align-self:center"></span></div></div>';
+  $("main").innerHTML=h;
+  [].forEach.call(document.querySelectorAll("#brk input"),function(e){e.onchange=function(){BREAKS[+e.dataset.i][e.dataset.k]=e.value;$("bMsg").textContent="保存していません";};});
+  [].forEach.call(document.querySelectorAll("[data-del]"),function(b){b.onclick=function(){BREAKS.splice(+b.dataset.del,1);renderEta();$("bMsg").textContent="保存していません";};});
+  $("bAdd").onclick=function(){BREAKS.push({s:"12:00",e:"13:00"});renderEta();$("bMsg").textContent="保存していません";};
+  $("bSave").onclick=function(){var bad=BREAKS.filter(function(b){return !(hm2m(b.s)<hm2m(b.e));});if(bad.length){$("bMsg").textContent="終わりが始まりより前の行があります";return;}
+    $("bMsg").textContent="保存中…";post({action:"breaks",set:true,breaks:BREAKS}).then(function(j){if(!j.ok)throw new Error(j.error);BREAKS=j.breaks;brkLoaded=true;renderEta();$("bMsg").textContent="保存しました";}).catch(function(e){$("bMsg").textContent="保存できません ("+e.message+")";});};
+}
 $("flt").onchange=render;$("q").oninput=render;
 /* ---------- 詳細 ---------- */
 var curS=null;
