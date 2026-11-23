@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.8版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える)
+  パレット確認 簡易版 第1.9版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (OK で次へ)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -51,10 +51,9 @@ button.warn{background:#fd7e14;color:#111}
 <body>
 <div id="top"><span id="who" style="font-size:18px;font-weight:bold;color:#fff">未ログイン</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="vbtn" style="font-size:13px;padding:4px 8px">音声 OFF</button><button id="out" class="hidden" style="font-size:13px;padding:4px 8px">ログアウト</button></div>
 <div id="steps"><span id="s1">①QR</span><span id="s2">②全体</span><span id="s3">③数</span><span id="s4">④パレット</span></div>
-<div id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas></div>
+<div id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas><button id="startBtn" class="go" style="position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);width:70%;margin:0;font-size:34px;padding:26px 0;z-index:3">開始</button></div>
 <p id="say">「開始」を押す</p>
 <div id="panel">
-  <button id="startBtn" class="go">開始</button>
   <!-- ② で文字が読めないとき: 手で入れる -->
   <div id="manual" class="hidden">
     <div class="row"><span class="mid">箱番号</span><input id="mNum" inputmode="numeric" maxlength="2"><span class="mid">オーダー下4桁</span><input id="mOrd" inputmode="numeric" maxlength="4"></div>
@@ -71,8 +70,8 @@ button.warn{background:#fd7e14;color:#111}
   </div>
 </div>
 <div id="toast" class="hidden" style="position:fixed;left:8px;right:8px;top:8px;background:#2f9e44;color:#fff;font-weight:bold;font-size:18px;padding:10px;border-radius:10px;z-index:8;text-align:center"></div>
-<div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.8版 / 2026-11-23 (区切りごとに緑で伝える) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button><button id="dlgNo" class="hidden" style="background:#868e96;margin-top:10px;width:100%;font-size:22px">もう一度確認する</button></div></div>
+<div id="foot">パレット確認 簡易版 第1.9版 / 2026-11-23 (確認済みのカートンは誰が確認したかを出す) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -107,8 +106,23 @@ function setStep(n){
 function flash(t,then){paused=true;say(t,"ok");setTimeout(function(){paused=false;if(then)then();},1300);}
 function toast(t){var d=$("toast");d.textContent=t;d.classList.remove("hidden");clearTimeout(d._t);d._t=setTimeout(function(){d.classList.add("hidden");},3000);}
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
-function dialog(msg,next){$("dlgMsg").innerHTML=msg;$("dlg").classList.remove("hidden");paused=true;
-  $("dlgOk").onclick=function(){$("dlg").classList.add("hidden");paused=false;if(next)next();};}
+function dialog(msg,next,okLabel,noLabel,noFn){$("dlgMsg").innerHTML=msg;$("dlg").classList.remove("hidden");paused=true;
+  $("dlgOk").textContent=okLabel||"OK";$("dlgNo").classList.toggle("hidden",!noLabel);if(noLabel)$("dlgNo").textContent=noLabel;
+  $("dlgOk").onclick=function(){$("dlg").classList.add("hidden");paused=false;if(next)next();};
+  $("dlgNo").onclick=function(){$("dlg").classList.add("hidden");paused=false;if(noFn)noFn();};}
+/* 第1.9版: 通番とオーダーが決まったら、もう確認済みかをサーバに問い合わせ (裏で)、済んでいれば誰が確認したかを出してキャンセルできるようにする */
+function checkDone(sn,order){
+  var my=cur;
+  post({action:"palletInfo",serial:String(Number(sn)),order:order}).then(function(j){
+    if(cur!==my||!j.ok)return;
+    var rs=(j.records||[]).filter(function(r){return r.order===order;});var last=rs[rs.length-1];
+    if(!last||last.kind==="取消"||!last.confirmed)return;
+    var t=String(last.at||"").slice(11,16);
+    dialog("通番 "+Number(sn)+" ("+esc(order)+") は<br><span style=\"font-size:30px\">"+esc(last.by)+"</span><br>によって確認が終わっています<br><small>"+esc(last.at.slice(5,10).replace("-","/"))+" "+t+" / カートン "+last.from+"〜"+last.to+"</small>",
+      function(){reset();$("cSerial").value="";say("キャンセルしました","ok");setTimeout(function(){setStep(1);},900);},
+      "キャンセル (次のカートンへ)","もう一度確認する",function(){my.force=true;log("確認済みだが続ける 通番 "+sn);});
+  }).catch(function(){});
+}
 /* ---------- 通信 ---------- */
 function post(body){body.token=token;return fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});}
 function tryToken(t){
@@ -247,6 +261,7 @@ function decide(num,ord){
   if(!hit){say("箱 "+num+" の通番がリストに無い","ng");$("manual").classList.remove("hidden");return;}
   cur.order=o;cur.row=hit;
   $("cSerial").value=hit.serial;$("cOrder").textContent=o.order;$("cOhm").textContent=(cur.pq&&cur.pq.name)||o.item||"";   /* 第1.1版: オーム数も出す */$("cFrom").value=hit.from;$("cTo").value=hit.to;showN();
+  checkDone(hit.serial,o.order);
   flash("✓ 文字を読みました (箱 "+num+")",function(){setStep(3);});
 }
 function showN(){var f=+$("cFrom").value,t=+$("cTo").value;$("cN").textContent=(f&&t&&t>=f)?(t-f+1)+" 箱":"";}
@@ -261,7 +276,7 @@ function onLabel(txt){
 }
 function finish(sn,note){
   var o=cur.order;var photos=cur.photos.map(function(p){p.order=o.order;return p;});
-  bgSave({serial:String(Number(sn)),order:o.order,from:+$("cFrom").value,to:+$("cTo").value,scanned:cur.fixed.num||"",scanSrc:cur.manual?"手入力":"OCR",confirmed:true,qrId:cur.pq?cur.pq.id:"",note:"簡易版"+(note?" "+note:"")},photos);
+  bgSave({serial:String(Number(sn)),order:o.order,from:+$("cFrom").value,to:+$("cTo").value,scanned:cur.fixed.num||"",scanSrc:cur.manual?"手入力":"OCR",confirmed:true,force:!!cur.force,qrId:cur.pq?cur.pq.id:"",note:"簡易版"+(note?" "+note:"")},photos);
   setStep(5);say("終わりました","ok","finished");
   var rest=SUMI.filter(function(r){return r.serial===String(Number(sn))&&r.order!==o.order;}).length;
   dialog("通番 "+sn+" の確認が<br>終わりました"+(rest?"<br><small>このパレットには、ほかに "+rest+" オーダーあります</small>":""),function(){
