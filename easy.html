@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.2版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す)
+  パレット確認 簡易版 第1.2版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (OK で次へ)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -49,7 +49,7 @@ button.warn{background:#fd7e14;color:#111}
 </style>
 </head>
 <body>
-<div id="top"><span id="who">未ログイン</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="out" class="hidden" style="font-size:13px;padding:4px 8px">ログアウト</button></div>
+<div id="top"><span id="who">未ログイン</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="vbtn" style="font-size:13px;padding:4px 8px">音声 OFF</button><button id="out" class="hidden" style="font-size:13px;padding:4px 8px">ログアウト</button></div>
 <div id="steps"><span id="s1">①QR</span><span id="s2">②全体</span><span id="s3">③数</span><span id="s4">④パレット</span></div>
 <div id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas></div>
 <p id="say">「開始」を押す</p>
@@ -71,7 +71,7 @@ button.warn{background:#fd7e14;color:#111}
   </div>
 </div>
 <div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.2版 / 2026-11-23 (ログインできたことを緑で出す) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="foot">パレット確認 簡易版 第1.4版 / 2026-11-23 (緑の枠のまわりだけで QR を探す) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -87,7 +87,8 @@ function audioCtx(){if(!actx){var C=window.AudioContext||window.webkitAudioConte
 function loadVoice(id){var c=audioCtx();if(!c||vbuf[id])return;fetch("voice/"+id+".mp3?v=3").then(function(r){return r.arrayBuffer();}).then(function(b){c.decodeAudioData(b,function(x){vbuf[id]=x;},function(){});}).catch(function(){});}
 ["login","qrnear","pullback","pallet","finished","labelng","recfail","badtoken","neterr"].forEach(loadVoice);
 var vsrc=null;
-function voice(id){var c=audioCtx();if(!c||!vbuf[id])return;try{if(c.state==="suspended")c.resume();if(vsrc)vsrc.stop();var s=c.createBufferSource();s.buffer=vbuf[id];s.connect(c.destination);s.start(0);vsrc=s;}catch(e){}}
+var voiceOn=false;try{voiceOn=localStorage.getItem("easy_voice")==="on";}catch(e){}   /* 第1.3版: 声は出さないのが既定 */
+function voice(id){if(!voiceOn)return;var c=audioCtx();if(!c||!vbuf[id])return;try{if(c.state==="suspended")c.resume();if(vsrc)vsrc.stop();var s=c.createBufferSource();s.buffer=vbuf[id];s.connect(c.destination);s.start(0);vsrc=s;}catch(e){}}
 document.addEventListener("click",function(){var c=audioCtx();if(c&&c.state==="suspended")try{c.resume();}catch(e){}},true);
 /* ---------- 表示 ---------- */
 function say(t,cls,vid){var s=$("say");if(s.textContent!==t&&vid)voice(vid);s.textContent=t;s.className=cls||"";}
@@ -99,7 +100,7 @@ function setStep(n){
   if(n===1)say("① QR を緑の四角に近づける","", "qrnear");
   if(n===2){say("② 離して、ラベル全体を白い枠に","", "pullback");s2At=Date.now();}
   if(n===3)say("③ パレットの箱を数える","");
-  if(n===4)say("④ パレットラベルを白い枠に","", "pallet");
+  if(n===4)say("④ パレットの QR を緑の枠に合わせてください","");
 }
 function dialog(msg,next){$("dlgMsg").innerHTML=msg;$("dlg").classList.remove("hidden");paused=true;
   $("dlgOk").onclick=function(){$("dlg").classList.add("hidden");paused=false;if(next)next();};}
@@ -119,6 +120,8 @@ function loadLists(){
   .then(function(k){SUMI=k.rows||[];log("オーダー "+ORDERS.length+" / リスト "+SUMI.length);setStep(1);})
   .catch(function(){say("リストを読めません。開き直してください","ng","neterr");});
 }
+function drawV(){$("vbtn").textContent=voiceOn?"音声 ON":"音声 OFF";$("vbtn").style.background=voiceOn?"#2f9e44":"#444";}drawV();
+$("vbtn").onclick=function(){voiceOn=!voiceOn;try{localStorage.setItem("easy_voice",voiceOn?"on":"off");}catch(e){}drawV();};
 $("out").onclick=function(){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;$("who").textContent="未ログイン";$("out").classList.add("hidden");setStep(0);say("認証 QR を撮る","", "login");};
 /* 記録は裏で送る (失敗したら送り直す) */
 var saveq=[],saveBusy=false;
@@ -179,7 +182,7 @@ function drawGuide(){
   var W=video.clientWidth,H=video.clientHeight;if(!W||!H)return;var d=window.devicePixelRatio||1;
   if(ov.width!==W*d||ov.height!==H*d){ov.width=W*d;ov.height=H*d;}
   octx.setTransform(d,0,0,d,0,0);octx.clearRect(0,0,W,H);octx.lineWidth=4;octx.setLineDash([]);
-  if(STEP===0||STEP===1){var q=Math.min(W,H)*0.6;octx.strokeStyle="#40c057";octx.strokeRect((W-q)/2,(H-q)/2,q,q);return;}
+  if(STEP===0||STEP===1||STEP===4){var q=Math.min(W,H)*0.6;   /* 第1.3版: ④ も QR だけを緑の枠に合わせる */octx.strokeStyle="#40c057";octx.strokeRect((W-q)/2,(H-q)/2,q,q);return;}
   if(STEP===2&&video.videoWidth){var g=guide(LABEL,10,0.94).css,s=g.s;
     octx.strokeStyle="#fff";octx.strokeRect(g.ox+LABEL.u0*s,g.oy+LABEL.v0*s,(LABEL.u1-LABEL.u0)*s,(LABEL.v1-LABEL.v0)*s);
     octx.strokeStyle="#40c057";octx.strokeRect(g.ox,g.oy,s,s);
@@ -280,9 +283,17 @@ function tick(){
     }).catch(function(){busy=false;});
     return;
   }
-  var sc=Math.min(1,1280/Math.max(vw,vh));small.width=Math.round(vw*sc);small.height=Math.round(vh*sc);sctx.drawImage(full,0,0,small.width,small.height);
+  /* 第1.4版: 緑の枠のまわりだけを切り出して QR を探す (画面に見えていない所の QR は拾わない)。QR の真ん中が緑の枠の中のときだけ進む */
+  var W=video.clientWidth,H=video.clientHeight,k=Math.max(W/vw,H/vh),dx=(W-vw*k)/2,dy=(H-vh*k)/2;
+  var gq=Math.min(W,H)*0.6,gx=(W-gq)/2,gy=(H-gq)/2;
+  var bx=(gx-dx)/k,by=(gy-dy)/k,bz=gq/k,mg=bz*0.15;
+  var x0=Math.max(0,bx-mg),y0=Math.max(0,by-mg),x1=Math.min(vw,bx+bz+mg),y1=Math.min(vh,by+bz+mg);
+  var sf=Math.min(1,900/Math.max(x1-x0,y1-y0));small.width=Math.round((x1-x0)*sf);small.height=Math.round((y1-y0)*sf);
+  sctx.drawImage(full,x0,y0,x1-x0,y1-y0,0,0,small.width,small.height);
   ZXingWASM.readBarcodes(sctx.getImageData(0,0,small.width,small.height),{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1}).then(function(res){
     busy=false;if(!res||!res.length||!res[0].isValid)return;var txt=res[0].text;
+    var po=res[0].position,cx=x0+(po.topLeft.x+po.bottomRight.x)/2/sf,cy=y0+(po.topLeft.y+po.bottomRight.y)/2/sf;
+    if(cx<bx||cx>bx+bz||cy<by||cy>by+bz){say("QR を緑の枠の中に","ng");return;}
     if(/^US-[0-9A-F]{32}$/.test(txt)){if(txt!==token)tryToken(txt);return;}
     if(STEP===0){say("先に認証 QR を撮る","ng");return;}
     if(STEP===1){var pq=parseQR(txt);if(!pq){say("カートンラベルの QR ではない","ng");return;}
