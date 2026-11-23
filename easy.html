@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<title>パレット確認 簡易版</title>
+<!--
+  パレット確認 簡易版 第1.0版 (2026-11-23)
+  1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
+  → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (OK で次へ)
+  サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
+  画面の字は最小限。変えられる所 (入力欄) はオレンジの地。
+-->
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;font-family:system-ui,-apple-system,"Hiragino Sans","BIZ UDPGothic",sans-serif;background:#111;color:#fff;-webkit-text-size-adjust:100%}
+#top{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:13px;color:#bbb}
+#top .sp{flex:1}
+#badge{background:#555;color:#fff;border-radius:10px;padding:2px 8px;font-size:12px}
+#badge.hidden{display:none}
+#steps{display:flex;gap:4px;padding:0 10px 6px}
+#steps span{flex:1;text-align:center;padding:4px 0;border-radius:6px;background:#333;color:#888;font-weight:bold;font-size:15px}
+#steps span.on{background:#ffd43b;color:#111}
+#steps span.done{background:#2f9e44;color:#fff}
+#stage{position:relative;width:100%;aspect-ratio:3/4;background:#000;overflow:hidden}
+#video{width:100%;height:100%;object-fit:cover;display:block}
+#ov{position:absolute;left:0;top:0;width:100%;height:100%}
+#say{margin:0;padding:12px 12px;font-size:22px;font-weight:bold;line-height:1.35;background:#ffd43b;color:#111;min-height:62px}
+#say.ng{background:#e03131;color:#fff}
+#say.ok{background:#2f9e44;color:#fff}
+#panel{padding:12px}
+.big{font-size:40px;font-weight:bold;line-height:1.15}
+.mid{font-size:22px;font-weight:bold}
+.sub{font-size:14px;color:#aaa}
+.row{display:flex;gap:8px;align-items:center;margin:8px 0;flex-wrap:wrap}
+input{background:#ffa94d;color:#111;border:3px solid #fd7e14;border-radius:8px;font-size:26px;font-weight:bold;padding:6px 8px;width:5.2em;text-align:center}
+input:focus{outline:3px solid #fff}
+button{font-size:22px;font-weight:bold;border:0;border-radius:10px;padding:14px 16px;background:#444;color:#fff}
+button.go{background:#1c7ed6;width:100%;margin-top:10px}
+button.warn{background:#fd7e14;color:#111}
+.hidden{display:none!important}
+#dlg{position:fixed;inset:0;background:rgba(0,0,0,.75);display:flex;align-items:center;justify-content:center;z-index:9}
+#dlg .box{background:#fff;color:#111;border-radius:14px;padding:22px 18px;width:88%;max-width:420px;text-align:center}
+#dlg .msg{font-size:24px;font-weight:bold;line-height:1.4;margin-bottom:16px}
+#dlg button{background:#1c7ed6;width:100%;font-size:26px}
+#foot{font-size:11px;color:#666;padding:16px 10px 30px}
+#log{white-space:pre-wrap;font-size:10px;color:#666;max-height:120px;overflow:auto}
+</style>
+</head>
+<body>
+<div id="top"><span id="who">未ログイン</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="out" class="hidden" style="font-size:13px;padding:4px 8px">ログアウト</button></div>
+<div id="steps"><span id="s1">①QR</span><span id="s2">②全体</span><span id="s3">③数</span><span id="s4">④パレット</span></div>
+<div id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas></div>
+<p id="say">「開始」を押す</p>
+<div id="panel">
+  <button id="startBtn" class="go">開始</button>
+  <!-- ② で文字が読めないとき: 手で入れる -->
+  <div id="manual" class="hidden">
+    <div class="row"><span class="mid">箱番号</span><input id="mNum" inputmode="numeric" maxlength="2"><span class="mid">オーダー下4桁</span><input id="mOrd" inputmode="numeric" maxlength="4"></div>
+    <button id="mOk" class="warn" style="width:100%">この番号で進む</button>
+  </div>
+  <!-- ③ 箱の数を確かめる -->
+  <div id="count" class="hidden">
+    <div class="sub">通番</div>
+    <div class="row"><input id="cSerial" inputmode="numeric" maxlength="4" style="width:4.2em;font-size:40px"><span id="cOrder" class="mid"></span></div>
+    <div class="sub">カートン番号 (このパレット)</div>
+    <div class="row"><input id="cFrom" inputmode="numeric" maxlength="2"><span class="mid">〜</span><input id="cTo" inputmode="numeric" maxlength="2"><span id="cN" class="big"></span></div>
+    <button id="cOk" class="go">数が合っている → パレットラベルへ</button>
+  </div>
+</div>
+<div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button></div></div>
+<div id="foot">パレット確認 簡易版 第1.0版 / 2026-11-23 / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+var API="https://script.google.com/macros/s/AKfycbx5pITwYiVGCI6RGgZGdbF_imkfet5Snqv1shg0l6ycgdq2PTSjTTyJkpzPV4P45PaVlQ/exec";
+var TOKEN_KEY="qr_lookup_token_v1";
+function $(i){return document.getElementById(i);}
+function log(m){var p=$("log");p.textContent=new Date().toLocaleTimeString("ja-JP",{hour12:false})+" "+m+"\n"+p.textContent.slice(0,3000);}
+var token=null,userName="",ORDERS=null,SUMI=[];
+/* ---------- 声 (録音した男性の声だけ) ---------- */
+var actx=null,vbuf={};
+function audioCtx(){if(!actx){var C=window.AudioContext||window.webkitAudioContext;if(C)try{actx=new C();}catch(e){}try{if(navigator.audioSession)navigator.audioSession.type="playback";}catch(e){}}return actx;}
+function loadVoice(id){var c=audioCtx();if(!c||vbuf[id])return;fetch("voice/"+id+".mp3?v=3").then(function(r){return r.arrayBuffer();}).then(function(b){c.decodeAudioData(b,function(x){vbuf[id]=x;},function(){});}).catch(function(){});}
+["login","qrnear","pullback","pallet","finished","labelng","recfail","badtoken","neterr"].forEach(loadVoice);
+var vsrc=null;
+function voice(id){var c=audioCtx();if(!c||!vbuf[id])return;try{if(c.state==="suspended")c.resume();if(vsrc)vsrc.stop();var s=c.createBufferSource();s.buffer=vbuf[id];s.connect(c.destination);s.start(0);vsrc=s;}catch(e){}}
+document.addEventListener("click",function(){var c=audioCtx();if(c&&c.state==="suspended")try{c.resume();}catch(e){}},true);
+/* ---------- 表示 ---------- */
+function say(t,cls,vid){var s=$("say");if(s.textContent!==t&&vid)voice(vid);s.textContent=t;s.className=cls||"";}
+var STEP=0;   /* 0 ログイン / 1 QR / 2 全体 / 3 数 / 4 パレット / 5 終わり */
+function setStep(n){
+  STEP=n;["s1","s2","s3","s4"].forEach(function(id,i){var e=$(id);e.className=(i+1===n)?"on":(i+1<n?"done":"");});
+  $("count").classList.toggle("hidden",n!==3);
+  $("manual").classList.add("hidden");
+  if(n===1)say("① QR を緑の四角に近づける","", "qrnear");
+  if(n===2){say("② 離して、ラベル全体を白い枠に","", "pullback");s2At=Date.now();}
+  if(n===3)say("③ パレットの箱を数える","");
+  if(n===4)say("④ パレットラベルを白い枠に","", "pallet");
+}
+function dialog(msg,next){$("dlgMsg").innerHTML=msg;$("dlg").classList.remove("hidden");paused=true;
+  $("dlgOk").onclick=function(){$("dlg").classList.add("hidden");paused=false;if(next)next();};}
+/* ---------- 通信 ---------- */
+function post(body){body.token=token;return fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});}
+function tryToken(t){
+  token=t;say("認証を確認中","");
+  post({action:"whoami"}).then(function(j){
+    if(!j.ok){token=null;try{localStorage.removeItem(TOKEN_KEY);}catch(e){}say("認証 QR が無効","ng","badtoken");return;}
+    try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}
+    userName=j.name;$("who").textContent=j.name;$("out").classList.remove("hidden");loadLists();
+  }).catch(function(){token=null;say("通信エラー","ng","neterr");});
+}
+function loadLists(){
+  say("準備中","");
+  post({action:"candidates",pn:""}).then(function(j){ORDERS=j.orders||[];return post({action:"sumiAll"});})
+  .then(function(k){SUMI=k.rows||[];log("オーダー "+ORDERS.length+" / リスト "+SUMI.length);setStep(1);})
+  .catch(function(){say("リストを読めません。開き直してください","ng","neterr");});
+}
+$("out").onclick=function(){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;$("who").textContent="未ログイン";$("out").classList.add("hidden");setStep(0);say("認証 QR を撮る","", "login");};
+/* 記録は裏で送る (失敗したら送り直す) */
+var saveq=[],saveBusy=false;
+function badge(){var b=$("badge"),n=saveq.length+upq.length;b.textContent=n?("送信中 "+n):"";b.classList.toggle("hidden",!n);}
+function bgSave(req,photos){saveq.push({req:req,photos:photos,tries:0});badge();runSave();}
+function runSave(){
+  if(saveBusy||!saveq.length||!token)return;saveBusy=true;var job=saveq[0];var b={action:"saveRange"};for(var k in job.req)b[k]=job.req[k];
+  post(b).then(function(j){saveBusy=false;
+    if(!j.ok&&j.error!=="already_confirmed")throw new Error(j.error);
+    saveq.shift();log(j.ok?"記録 通番 "+job.req.serial:"確認済みだった 通番 "+job.req.serial+" "+j.by);
+    if(j.ok&&job.photos.length){upq.push({serial:job.req.serial,items:job.photos,tries:0});}
+    badge();runSave();runUp();
+  }).catch(function(e){saveBusy=false;job.tries++;log("記録の送信に失敗 "+job.tries+" "+e.message);
+    if(job.tries>=8){saveq.shift();say("記録を送れませんでした。通番 "+job.req.serial+" をやり直す","ng","recfail");}
+    badge();setTimeout(runSave,Math.min(30000,3000*job.tries));});
+}
+var upq=[],upBusy=false;
+function runUp(){
+  if(upBusy||!upq.length||!token||saveq.length||saveBusy)return;upBusy=true;var job=upq[0];
+  post({action:"photos",serial:job.serial,items:job.items}).then(function(j){upBusy=false;upq.shift();badge();runUp();})
+  .catch(function(){upBusy=false;job.tries++;if(job.tries>=5)upq.shift();badge();setTimeout(runUp,5000*job.tries);});
+}
+window.addEventListener("online",function(){runSave();runUp();});
+window.addEventListener("beforeunload",function(e){if(saveq.length||upq.length){e.preventDefault();e.returnValue="";}});
+/* ---------- カメラ ---------- */
+var video=$("video"),ov=$("ov"),octx=ov.getContext("2d");
+var full=document.createElement("canvas"),fctx=full.getContext("2d",{willReadFrequently:true});
+var small=document.createElement("canvas"),sctx=small.getContext("2d",{willReadFrequently:true});
+var stream=null,timer=null,busy=false,busySince=0,paused=false,worker=null,workerReady=false;
+var LABEL={u0:-6.2,v0:-0.5,u1:1.65,v1:4.4},PLABEL={u0:-4.875,v0:-2.542,u1:1.3125,v1:1.833};
+var BOX={num:{u0:-0.1,v0:2.4,u1:1.45,v1:3.6},ord:{u0:-0.9,v0:3.3,u1:0.5,v1:4.15}},PX=110,NEED=3;
+function startCam(){
+  return navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false})
+  .then(function(s){stream=s;video.srcObject=s;var p=video.play();if(p&&p.catch)p.catch(function(){});frzAt=Date.now();frzSum=-1;if(!timer)timer=setInterval(tick,200);});
+}
+$("startBtn").onclick=function(){
+  this.classList.add("hidden");
+  startCam().then(function(){
+    if(!worker)Tesseract.createWorker("eng",1,{langPath:"https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int",gzip:true})
+      .then(function(w){worker=w;return w.setParameters({tessedit_char_whitelist:"0123456789",tessedit_pageseg_mode:"7"});}).then(function(){workerReady=true;log("文字認識 準備OK");});
+    var t=null;try{t=localStorage.getItem(TOKEN_KEY);}catch(e){}
+    if(t)tryToken(t);else{setStep(0);say("認証 QR を撮る","","login");}
+  }).catch(function(e){$("startBtn").classList.remove("hidden");say("カメラを使えません: "+e.name,"ng");});
+};
+/* 映像が 2 秒止まったらカメラを入れ直す */
+var frzSum=-1,frzAt=0,frzBusy=false;
+function restartCam(){frzBusy=true;log("カメラを入れ直す");try{stream.getTracks().forEach(function(t){t.stop();});}catch(e){}stream=null;
+  setTimeout(function(){startCam().then(function(){frzBusy=false;busy=false;},function(){frzBusy=false;});},300);}
+/* 白い枠の位置 (QR の左上 x,y と一辺 z、映像の画素) */
+function guide(box,top,frac){
+  var W=video.clientWidth,H=video.clientHeight,vw=video.videoWidth,vh=video.videoHeight;
+  var lw=box.u1-box.u0,lh=box.v1-box.v0,s=Math.min(W*frac/lw,(H-top-10)*0.95/lh);
+  var ox=(W-lw*s)/2-box.u0*s,oy=top+((H-top-10)-lh*s)/2-box.v0*s;
+  var k=Math.max(W/vw,H/vh),dx=(W-vw*k)/2,dy=(H-vh*k)/2;
+  return {css:{ox:ox,oy:oy,s:s},v:{x:(ox-dx)/k,y:(oy-dy)/k,z:s/k}};
+}
+function drawGuide(){
+  var W=video.clientWidth,H=video.clientHeight;if(!W||!H)return;var d=window.devicePixelRatio||1;
+  if(ov.width!==W*d||ov.height!==H*d){ov.width=W*d;ov.height=H*d;}
+  octx.setTransform(d,0,0,d,0,0);octx.clearRect(0,0,W,H);octx.lineWidth=4;octx.setLineDash([]);
+  if(STEP===0||STEP===1){var q=Math.min(W,H)*0.6;octx.strokeStyle="#40c057";octx.strokeRect((W-q)/2,(H-q)/2,q,q);return;}
+  if(STEP===2&&video.videoWidth){var g=guide(LABEL,10,0.94).css,s=g.s;
+    octx.strokeStyle="#fff";octx.strokeRect(g.ox+LABEL.u0*s,g.oy+LABEL.v0*s,(LABEL.u1-LABEL.u0)*s,(LABEL.v1-LABEL.v0)*s);
+    octx.strokeStyle="#40c057";octx.strokeRect(g.ox,g.oy,s,s);
+    octx.setLineDash([6,4]);octx.lineWidth=2;octx.strokeStyle="#ff6b6b";octx.strokeRect(g.ox+BOX.num.u0*s,g.oy+BOX.num.v0*s,(BOX.num.u1-BOX.num.u0)*s,(BOX.num.v1-BOX.num.v0)*s);
+    octx.strokeStyle="#4dabf7";octx.strokeRect(g.ox+BOX.ord.u0*s,g.oy+BOX.ord.v0*s,(BOX.ord.u1-BOX.ord.u0)*s,(BOX.ord.v1-BOX.ord.v0)*s);return;}
+  if(STEP===4&&video.videoWidth){var p=guide(PLABEL,10,0.94).css,t=p.s;octx.strokeStyle="#fff";
+    octx.strokeRect(p.ox+PLABEL.u0*t,p.oy+PLABEL.v0*t,(PLABEL.u1-PLABEL.u0)*t,(PLABEL.v1-PLABEL.v0)*t);octx.strokeStyle="#40c057";octx.strokeRect(p.ox,p.oy,t,t);}
+}
+/* ---------- 文字を読む (pallet.html と同じ) ---------- */
+function crop(q,b){
+  var ax=q[1].x-q[0].x,ay=q[1].y-q[0].y,bx=q[3].x-q[0].x,by=q[3].y-q[0].y;
+  var w=Math.round((b.u1-b.u0)*PX),h=Math.round((b.v1-b.v0)*PX);
+  var c=document.createElement("canvas");c.width=w;c.height=h;var x=c.getContext("2d",{willReadFrequently:true});
+  x.fillStyle="#fff";x.fillRect(0,0,w,h);
+  var m11=ax/PX,m21=ay/PX,m12=bx/PX,m22=by/PX,tx=q[0].x+b.u0*ax+b.v0*bx,ty=q[0].y+b.u0*ay+b.v0*by;
+  var det=m11*m22-m12*m21;if(Math.abs(det)<1e-9)return null;
+  var i11=m22/det,i12=-m12/det,i21=-m21/det,i22=m11/det;
+  x.setTransform(i11,i21,i12,i22,-(i11*tx+i12*ty),-(i21*tx+i22*ty));x.drawImage(full,0,0);x.setTransform(1,0,0,1,0,0);
+  var dd=x.getImageData(0,0,w,h),p=dd.data;for(var i=0;i<p.length;i+=4){var g=(p[i]*0.299+p[i+1]*0.587+p[i+2]*0.114)|0;p[i]=p[i+1]=p[i+2]=g;}
+  x.putImageData(dd,0,0);return c;
+}
+function otsu(c){
+  var x=c.getContext("2d",{willReadFrequently:true}),d=x.getImageData(0,0,c.width,c.height),p=d.data,h=new Array(256).fill(0),n=p.length/4;
+  for(var i=0;i<p.length;i+=4)h[p[i]]++;var sum=0;for(i=0;i<256;i++)sum+=i*h[i];
+  var sB=0,wB=0,best=0,th=128;for(i=0;i<256;i++){wB+=h[i];if(!wB)continue;var wF=n-wB;if(!wF)break;sB+=i*h[i];var mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;th=i;}}
+  var o=document.createElement("canvas");o.width=c.width;o.height=c.height;var ox=o.getContext("2d"),od=ox.createImageData(c.width,c.height);
+  for(i=0;i<p.length;i+=4){var v2=p[i]>th?255:0;od.data[i]=od.data[i+1]=od.data[i+2]=v2;od.data[i+3]=255;}ox.putImageData(od,0,0);return o;
+}
+function pad(c){var o=document.createElement("canvas");o.width=c.width+40;o.height=c.height+40;var x=o.getContext("2d");x.fillStyle="#fff";x.fillRect(0,0,o.width,o.height);x.drawImage(c,20,20);return o;}
+function cands(){return (ORDERS||[]).filter(function(o){return cur.pq&&o.pn===cur.pq.pn;}).map(function(o){return o.last4;});}
+function judge(k,raw){
+  if(k==="ord"){var lines=String(raw).split(/\n/).map(function(l){return l.replace(/\D/g,"");}).filter(function(l){return l.length>=5;});
+    if(!lines.length)return null;var cs=cands();for(var i=lines.length-1;i>=0;i--){if(cs.indexOf(lines[i].slice(-4))>=0)return lines[i].slice(-4);}return lines[lines.length-1].slice(-4);}
+  raw=String(raw).replace(/\s/g,"");var m=raw.match(/^\d{1,2}$/);if(!m)return null;var n=+m[0];return (n>=1&&n<=99)?String(n):null;
+}
+function ocrOne(k,c){
+  var vars=[pad(c),pad(otsu(c))];
+  return worker.setParameters({tessedit_pageseg_mode:k==="ord"?"6":"7"}).then(function(){return worker.recognize(vars[0]);})
+  .then(function(r1){return worker.recognize(vars[1]).then(function(r2){return [r1.data.text,r2.data.text];});})
+  .then(function(raws){raws.forEach(function(raw){var v=judge(k,raw);if(v){cur.votes[k][v]=(cur.votes[k][v]||0)+1;if(cur.votes[k][v]>=NEED&&!cur.fixed[k]){cur.fixed[k]=v;log("確定 "+k+"="+v);}}});});
+}
+/* ---------- 1 件分の状態 ---------- */
+var cur,s2At=0;
+function reset(){cur={qr:null,pq:null,votes:{num:{},ord:{}},fixed:{num:null,ord:null},order:null,row:null,photos:[]};}
+reset();
+function parseQR(t){t=String(t).trim().replace(/'+$/,"");var f=t.split(",");if(f.length<6)return null;return {id:f[0],pn:f[3],name:f[4]};}
+function snap(kind){try{var s=Math.min(1,800/Math.max(full.width,full.height)),c=document.createElement("canvas");c.width=Math.round(full.width*s);c.height=Math.round(full.height*s);
+  c.getContext("2d").drawImage(full,0,0,c.width,c.height);cur.photos=cur.photos.filter(function(p){return p.kind!==kind;});cur.photos.push({kind:kind,order:"",data:c.toDataURL("image/jpeg",0.6).split(",")[1]});}catch(e){}}
+/* 箱番号と下 4 桁から、オーダーと通番を決める */
+function decide(num,ord){
+  var list=(ORDERS||[]).filter(function(o){return o.pn===cur.pq.pn;});
+  var o=list.filter(function(x){return x.last4===ord;})[0]||(list.length===1?list[0]:null);
+  if(!o){say("リストに無いオーダー ("+ord+")","ng");$("manual").classList.remove("hidden");return;}
+  var n=+num,rows=SUMI.filter(function(r){return r.order===o.order;}),hit=rows.filter(function(r){return r.from&&r.to&&n>=r.from&&n<=r.to;})[0];
+  if(!hit){say("箱 "+num+" の通番がリストに無い","ng");$("manual").classList.remove("hidden");return;}
+  cur.order=o;cur.row=hit;
+  $("cSerial").value=hit.serial;$("cOrder").textContent=o.order;$("cFrom").value=hit.from;$("cTo").value=hit.to;showN();
+  setStep(3);
+}
+function showN(){var f=+$("cFrom").value,t=+$("cTo").value;$("cN").textContent=(f&&t&&t>=f)?(t-f+1)+" 箱":"";}
+["cFrom","cTo"].forEach(function(id){$(id).addEventListener("input",showN);});
+$("cOk").onclick=function(){var f=+$("cFrom").value,t=+$("cTo").value;if(!(f>=1&&t>=f)){say("範囲を入れる","ng");return;}setStep(4);};
+$("mOk").onclick=function(){var n=$("mNum").value.replace(/\D/g,""),o=$("mOrd").value.replace(/\D/g,"");if(!n||o.length!==4){say("箱番号と下4桁を入れる","ng");return;}cur.fixed.num=n;cur.fixed.ord=o;cur.manual=true;decide(n,o);};
+/* パレットラベルを読んだ */
+function onLabel(txt){
+  var sn=String(Number($("cSerial").value||0)),m=/^MVP,0[12],(\d{1,4}),/.exec(txt+",");
+  if(m&&String(Number(m[1]))!==sn){say("ラベルの通番 "+Number(m[1])+" ≠ "+sn,"ng","labelng");return;}
+  snap("label");finish(sn,m?"":"手書きラベル");
+}
+function finish(sn,note){
+  var o=cur.order;var photos=cur.photos.map(function(p){p.order=o.order;return p;});
+  bgSave({serial:String(Number(sn)),order:o.order,from:+$("cFrom").value,to:+$("cTo").value,scanned:cur.fixed.num||"",scanSrc:cur.manual?"手入力":"OCR",confirmed:true,qrId:cur.pq?cur.pq.id:"",note:"簡易版"+(note?" "+note:"")},photos);
+  setStep(5);say("終わりました","ok","finished");
+  var rest=SUMI.filter(function(r){return r.serial===String(Number(sn))&&r.order!==o.order;}).length;
+  dialog("通番 "+sn+" の確認が<br>終わりました"+(rest?"<br><small>このパレットには、ほかに "+rest+" オーダーあります</small>":""),function(){
+    dialog("次のカートンを読みますか？",function(){reset();$("cSerial").value="";setStep(1);});
+  });
+}
+/* ---------- 毎フレーム ---------- */
+function tick(){
+  if(stream&&video.paused){try{var pp=video.play();if(pp&&pp.catch)pp.catch(function(){});}catch(e){}}
+  drawGuide();
+  if(busy&&Date.now()-busySince>8000)busy=false;
+  if(paused||busy||!stream||video.readyState<2||!window.ZXingWASM||STEP===3||STEP===5)return;
+  var vw=video.videoWidth,vh=video.videoHeight;if(!vw)return;
+  full.width=vw;full.height=vh;fctx.drawImage(video,0,0,vw,vh);
+  try{var fp=fctx.getImageData((vw>>1)-12,(vh>>1)-12,24,24).data,fs=0;for(var i=0;i<fp.length;i+=4)fs=(fs*31+fp[i]+fp[i+1]*3+fp[i+2]*7)%1000000007;
+    if(fs!==frzSum){frzSum=fs;frzAt=Date.now();}else if(Date.now()-frzAt>2000&&!frzBusy){restartCam();return;}}catch(e){}
+  busy=true;busySince=Date.now();
+  if(STEP===2){   /* 白い枠の位置から箱番号とオーダーの所を切り出して読む */
+    if(!workerReady){busy=false;say("文字認識の準備中","");return;}
+    var g=guide(LABEL,10,0.94).v,q=[{x:g.x,y:g.y},{x:g.x+g.z,y:g.y},{x:g.x+g.z,y:g.y+g.z},{x:g.x,y:g.y+g.z}];
+    var cn=crop(q,BOX.num),co=crop(q,BOX.ord);
+    (cur.fixed.num||!cn?Promise.resolve():ocrOne("num",cn)).then(function(){return cur.fixed.ord||!co?null:ocrOne("ord",co);}).then(function(){
+      busy=false;if(STEP!==2)return;
+      if(cur.fixed.num&&cur.fixed.ord){decide(cur.fixed.num,cur.fixed.ord);return;}
+      if(Date.now()-s2At>10000)$("manual").classList.remove("hidden");   /* 10 秒読めなければ、手で入れる欄を出す */
+    }).catch(function(){busy=false;});
+    return;
+  }
+  var sc=Math.min(1,1280/Math.max(vw,vh));small.width=Math.round(vw*sc);small.height=Math.round(vh*sc);sctx.drawImage(full,0,0,small.width,small.height);
+  ZXingWASM.readBarcodes(sctx.getImageData(0,0,small.width,small.height),{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1}).then(function(res){
+    busy=false;if(!res||!res.length||!res[0].isValid)return;var txt=res[0].text;
+    if(/^US-[0-9A-F]{32}$/.test(txt)){if(txt!==token)tryToken(txt);return;}
+    if(STEP===0){say("先に認証 QR を撮る","ng");return;}
+    if(STEP===1){var pq=parseQR(txt);if(!pq){say("カートンラベルの QR ではない","ng");return;}
+      cur.qr=txt;cur.pq=pq;snap("carton");log("QR "+pq.pn);setStep(2);return;}
+    if(STEP===4&&/^MVPH?,\d{2},/.test(txt))onLabel(txt);
+  }).catch(function(){busy=false;});
+}
+</script>
+</body>
+</html>
