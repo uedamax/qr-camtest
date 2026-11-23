@@ -196,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.36版 / 2026-11-23 / 声は録音した男性の声 (青山龍星) だけにした (端末の読み上げを使わない)。確認済みの通番は「もう一度記録しますか」と聞く</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.37版 / 2026-11-23 / カートンラベルの QR が小さく写っても読めるよう、緑の四角のあたりを拡大して読み直す</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -1058,6 +1058,22 @@ function drawGuide(){
   }
 }
 
+/* 第1.37版: 白い枠の中の緑の四角 (カートンラベルの QR があるはずの所) を、映像の元の画素で切り出して拡大する */
+var cq=document.createElement("canvas"),cqx=cq.getContext("2d",{willReadFrequently:true});
+function cropQR(vw,vh){
+  var W=video.clientWidth,H=video.clientHeight;if(!W||!H)return null;
+  var lw=LABEL.u1-LABEL.u0,lh=LABEL.v1-LABEL.v0,top0=56,bot0=44,s=Math.min(W*0.9/lw,(H-top0-bot0)*0.95/lh);
+  var ox=(W-lw*s)/2-LABEL.u0*s,oy=top0+((H-top0-bot0)-lh*s)/2-LABEL.v0*s;   /* drawGuide と同じ計算 (QR の左上が ox,oy、一辺 s) */
+  var k=Math.max(W/vw,H/vh),dx=(W-vw*k)/2,dy=(H-vh*k)/2;
+  var x=(ox-dx)/k,y=(oy-dy)/k,z=s/k,m=z*0.7;
+  var x0=Math.max(0,x-m),y0=Math.max(0,y-m),x1=Math.min(vw,x+z+m),y1=Math.min(vh,y+z+m);
+  if(x1-x0<20||y1-y0<20)return null;
+  var out=Math.max(1,640/Math.max(x1-x0,y1-y0));   /* 長い辺 640 画素に拡大 (1 セル 5 画素ほど) */
+  cq.width=Math.round((x1-x0)*out);cq.height=Math.round((y1-y0)*out);
+  cqx.imageSmoothingEnabled=true;cqx.drawImage(full,x0,y0,x1-x0,y1-y0,0,0,cq.width,cq.height);
+  return {data:cqx.getImageData(0,0,cq.width,cq.height),x0:x0,y0:y0,f:1/out};
+}
+
 /* ---------- 毎フレーム ---------- */
 function tick(){
   drawGuide();renderScan();
@@ -1069,6 +1085,19 @@ function tick(){
   busy=true;var t0=performance.now();
   ZXingWASM.readBarcodes(sctx.getImageData(0,0,small.width,small.height),{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1})
   .then(function(res){
+    /* 第1.37版: ラベル全体を枠に合わせると、カートンラベルの QR (49×49 セル) は縮めた映像では 1 セル 2 画素ほどで読めない。
+       見つからないときは、緑の四角のあたりを縮めずに切り出して拡大し、もう一度探す */
+    if((!res||!res.length||!res[0].isValid)&&token&&!labelMode()){
+      var cr=cropQR(vw,vh);
+      if(cr)return ZXingWASM.readBarcodes(cr.data,{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1}).then(function(r2){
+        if(!r2||!r2.length||!r2[0].isValid)return res;
+        var p=r2[0].position,np={};
+        ["topLeft","topRight","bottomRight","bottomLeft"].forEach(function(k){np[k]={x:(cr.x0+p[k].x*cr.f)*sc,y:(cr.y0+p[k].y*cr.f)*sc};});
+        return [{text:r2[0].text,isValid:true,position:np}];
+      });
+    }
+    return res;
+  }).then(function(res){
     if(!res||!res.length||!res[0].isValid){busy=false;
       if(token&&!(st.fixed.num&&st.fixed.ord))setStatus(st.qr?"QRが見えていません。ラベルを枠に合わせてください。":"QRを探しています… ラベルを白い枠に合わせ、緑の四角にQRを入れてください。");
       return;}
