@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>パレット確認 状況</title>
+<!--
+  パレット確認 状況確認 第1.1版 (2026-11-23。1.1: スマホの幅に収める)
+  通番ごと・便ごとに、確認が終わったか・だれが・いつを見る。通番を押すと詳細 (オーダーごと・記録の履歴・写真)。
+  スマホはカードの一覧、PC (幅 900px 以上) は 1080p 向けの表と便の格子。
+  確認の状態を変えられるのは管理者だけ (GAS 第2.11版の adminSet)。認証は pallet.html・easy.html と同じ認証 QR。
+-->
+<style>
+*{box-sizing:border-box}
+html,body{overflow-x:hidden}
+body{margin:0;font-family:system-ui,-apple-system,"Hiragino Sans","BIZ UDPGothic",sans-serif;background:#f1f3f5;color:#212529}
+header{position:sticky;top:0;z-index:5;background:#212529;color:#fff;padding:8px 12px}
+.hrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+h1{font-size:18px;margin:0}
+.tag{border-radius:8px;padding:2px 8px;font-weight:bold;font-size:13px}
+#ver{background:#1c7ed6}
+#who{background:#c92a2a}
+#upd{font-size:12px;color:#adb5bd}
+.sp{flex:1}
+button{font:inherit;font-weight:bold;border:0;border-radius:8px;padding:8px 12px;background:#495057;color:#fff;cursor:pointer}
+button.on{background:#ffd43b;color:#212529}
+#bar{height:14px;background:#495057;border-radius:7px;overflow:hidden;margin-top:6px}
+#bar div{height:100%;background:#2f9e44}
+#sum{font-size:14px;margin-top:4px}
+#tools{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:#dee2e6;position:sticky;top:0}
+input,select,textarea{background:#ffa94d;color:#111;border:2px solid #fd7e14;border-radius:8px;font:inherit;font-weight:bold;padding:6px 8px}
+#q{width:9em}
+main{padding:8px 12px 40px}
+.chip{display:inline-block;border-radius:10px;padding:2px 8px;font-size:13px;font-weight:bold;color:#fff}
+.done{background:#2f9e44}.part{background:#e8590c}.none{background:#868e96}.memo{background:#c92a2a}
+/* スマホ: カード */
+.card{background:#fff;border-radius:10px;padding:10px 12px;margin:0 0 8px;display:grid;grid-template-columns:auto 1fr auto;gap:2px 10px;align-items:center;cursor:pointer;border-left:8px solid #868e96}
+.card.done{border-left-color:#2f9e44;background:#fff}.card.part{border-left-color:#e8590c}
+.card .sn{font-size:28px;font-weight:bold;grid-row:span 2}
+.card .tr{font-size:14px;color:#495057}
+.card .by{grid-column:2 / 4;font-size:13px;color:#495057}
+/* PC: 表 */
+table{border-collapse:collapse;width:100%;background:#fff;font-size:14px}
+th{position:sticky;top:44px;background:#343a40;color:#fff;font-weight:bold;padding:4px 6px;text-align:left;z-index:2}
+td{padding:3px 6px;border-bottom:1px solid #e9ecef;white-space:nowrap}
+tr.r{cursor:pointer}tr.r:hover{background:#fff3bf}
+td.sn{font-weight:bold;font-size:16px}
+/* 便ごと */
+.trips{display:grid;gap:10px}
+.trip{background:#fff;border-radius:10px;padding:8px 10px}
+.trip h3{margin:0 0 4px;font-size:16px;display:flex;gap:8px;align-items:center}
+.trip .mini{height:8px;background:#dee2e6;border-radius:4px;overflow:hidden;margin-bottom:6px}.trip .mini div{height:100%;background:#2f9e44}
+.sbtn{display:inline-block;min-width:46px;text-align:center;margin:2px;padding:4px 4px;border-radius:6px;font-weight:bold;color:#fff;cursor:pointer;font-size:14px}
+/* 詳細 */
+#det{position:fixed;inset:0;background:#f1f3f5;z-index:10;overflow:auto;padding:0 0 40px}
+#det .top{position:sticky;top:0;background:#212529;color:#fff;padding:10px 12px;display:flex;align-items:center;gap:10px}
+#det .body{padding:12px;max-width:1100px;margin:0 auto}
+.box{background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:10px}
+.box h4{margin:0 0 6px}
+.hist li{margin:4px 0;font-size:14px}
+.adm{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.adm button{background:#1c7ed6}.adm button.ng{background:#c92a2a}
+#login{max-width:420px;margin:30px auto;background:#fff;border-radius:12px;padding:16px}
+#cam{width:100%;background:#000;border-radius:8px;margin-top:8px}
+.hidden{display:none!important}
+#dlg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;display:flex;align-items:center;justify-content:center}
+#dlg .b{background:#fff;border-radius:12px;padding:16px;width:90%;max-width:420px}
+@media (min-width:900px){ .cards{display:none} .trips{grid-template-columns:repeat(4,1fr)} h1{font-size:22px} }
+@media (max-width:899px){ .tbl{display:none}
+  #tools .sp{display:none} #flt{flex:1;min-width:0} #q{flex:1;min-width:0;width:auto}
+  .card{grid-template-columns:auto minmax(0,1fr) auto} .card>*{min-width:0;overflow:hidden;text-overflow:ellipsis}
+  #det .top b{font-size:16px} #det .top{flex-wrap:wrap}
+  .trip h3{flex-wrap:wrap} .hrow{gap:4px} h1{font-size:16px} #upd{display:none} }
+</style>
+</head>
+<body>
+<header>
+  <div class="hrow"><h1>パレット確認 状況</h1><span id="ver" class="tag">状況 1.1</span><span id="who" class="tag">未ログイン</span><span class="sp"></span><span id="upd"></span><button id="reload">更新</button></div>
+  <div id="bar"><div style="width:0"></div></div>
+  <div id="sum"></div>
+</header>
+<div id="login" class="hidden">
+  <b>ログイン</b><div style="font-size:14px;color:#495057;margin:6px 0">認証 QR をカメラで読むか、認証の番号 (US-…) を入れてください。</div>
+  <input id="tok" placeholder="US-..." style="width:100%">
+  <div style="display:flex;gap:6px;margin-top:8px"><button id="tokOk" style="flex:1">ログイン</button><button id="camBtn" style="flex:1">カメラで読む</button></div>
+  <video id="cam" class="hidden" playsinline muted></video>
+  <div id="lmsg" style="margin-top:6px;color:#c92a2a;font-weight:bold"></div>
+</div>
+<div id="app" class="hidden">
+  <div id="tools">
+    <button id="tSerial" class="on">通番ごと</button><button id="tTrip">便ごと</button>
+    <span class="sp"></span>
+    <select id="flt"><option value="">すべて</option><option value="none">未確認</option><option value="part">一部</option><option value="done">確認済み</option></select>
+    <input id="q" placeholder="通番・オーダー">
+  </div>
+  <main id="main"></main>
+</div>
+<div id="det" class="hidden"><div class="top"><button id="back">← 一覧へ</button><b id="detT" style="font-size:20px"></b></div><div class="body" id="detB"></div></div>
+<div id="dlg" class="hidden"><div class="b"><div id="dlgM" style="font-weight:bold;font-size:18px;margin-bottom:8px"></div><input id="dlgR" placeholder="理由 (任意)" style="width:100%"><div style="display:flex;gap:8px;margin-top:10px"><button id="dlgNo" style="flex:1">やめる</button><button id="dlgOk" style="flex:1;background:#1c7ed6">はい</button></div></div></div>
+
+<script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
+<script>
+var API="https://script.google.com/macros/s/AKfycbx5pITwYiVGCI6RGgZGdbF_imkfet5Snqv1shg0l6ycgdq2PTSjTTyJkpzPV4P45PaVlQ/exec";
+var TOKEN_KEY="qr_lookup_token_v1";
+function $(i){return document.getElementById(i);}
+function esc(t){return String(t==null?"":t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+var token=null,admin=false,DATA=null,VIEW="serial",SER={},TRIPS=[];
+function post(b){b.token=token;return fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(b)}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});}
+/* ---------- ログイン ---------- */
+function login(t){
+  token=t;$("who").textContent="ログイン確認中…";$("who").style.background="#e8590c";
+  post({action:"whoami"}).then(function(j){
+    if(!j.ok){token=null;$("lmsg").textContent="この認証は使えません";showLogin();return;}
+    try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}
+    admin=!!j.admin;$("who").textContent="ログイン中: "+j.name+(admin?" (管理者)":"");$("who").style.background="#2f9e44";
+    $("login").classList.add("hidden");$("app").classList.remove("hidden");stopCam();load();
+  }).catch(function(){token=null;$("lmsg").textContent="通信エラー";showLogin();});
+}
+function showLogin(){$("who").textContent="未ログイン";$("who").style.background="#c92a2a";$("login").classList.remove("hidden");$("app").classList.add("hidden");}
+$("tokOk").onclick=function(){var t=$("tok").value.trim();if(t)login(t);};
+var camS=null,camT=null;
+$("camBtn").onclick=function(){
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"}},audio:false}).then(function(s){camS=s;var v=$("cam");v.srcObject=s;v.classList.remove("hidden");v.play();
+    var c=document.createElement("canvas"),x=c.getContext("2d",{willReadFrequently:true}),busy=false;
+    camT=setInterval(function(){if(busy||!v.videoWidth||!window.ZXingWASM)return;busy=true;c.width=v.videoWidth;c.height=v.videoHeight;x.drawImage(v,0,0);
+      ZXingWASM.readBarcodes(x.getImageData(0,0,c.width,c.height),{formats:["QRCode"],maxNumberOfSymbols:1}).then(function(r){busy=false;
+        if(r&&r.length&&/^US-[0-9A-F]{32}$/.test(r[0].text)){login(r[0].text);}else if(r&&r.length)$("lmsg").textContent="これは認証 QR ではありません";}).catch(function(){busy=false;});},300);
+  }).catch(function(e){$("lmsg").textContent="カメラを使えません: "+e.name;});
+};
+function stopCam(){if(camT)clearInterval(camT);camT=null;if(camS)camS.getTracks().forEach(function(t){t.stop();});camS=null;$("cam").classList.add("hidden");}
+/* ---------- データ ---------- */
+function load(){
+  $("upd").textContent="読み込み中…";
+  post({action:"records"}).then(function(j){if(!j.ok)throw new Error(j.error);DATA=j;build();render();$("upd").textContent="更新 "+j.at.slice(11,16);})
+  .catch(function(e){$("upd").textContent="読み込めません ("+e.message+")";});
+}
+$("reload").onclick=load;
+setInterval(function(){if(token&&$("det").classList.contains("hidden"))load();},60000);   /* 1 分ごとに読み直す (詳細を見ている間は止める) */
+function tripOf(note){return String(note||"").split(" / ")[0]||"(便なし)";}
+function itemOf(note){return String(note||"").split(" / ")[1]||"";}
+function build(){
+  SER={};var byKey={};
+  DATA.sumi.forEach(function(r){var s=String(Number(r.serial));var o=SER[s]=SER[s]||{serial:s,trip:tripOf(r.note),item:itemOf(r.note),orders:[],recs:[]};o.orders.push({order:r.order,from:r.from,to:r.to,note:r.note});});
+  DATA.records.forEach(function(r){var s=String(Number(r.serial));if(!SER[s])SER[s]={serial:s,trip:"(リストに無い)",item:"",orders:[],recs:[]};SER[s].recs.push(r);byKey[s+"|"+r.order]=r;});
+  Object.keys(SER).forEach(function(s){var o=SER[s];var nd=0,last=null,memo=false;
+    o.orders.forEach(function(od){var r=byKey[s+"|"+od.order];od.last=r||null;od.done=!!(r&&r.kind!=="取消"&&r.confirmed);if(od.done){nd++;if(!last||r.at>last.at)last=r;}if(r&&!od.done&&r.kind!=="取消")memo=true;});
+    o.n=o.orders.length;o.nd=nd;o.st=o.n&&nd===o.n?"done":(nd?"part":"none");o.last=last;o.memo=memo;
+    o.boxes=o.orders.reduce(function(a,b){return a+(b.from&&b.to?b.to-b.from+1:0);},0);});
+  var tm={};Object.keys(SER).forEach(function(s){var t=SER[s].trip;(tm[t]=tm[t]||[]).push(SER[s]);});
+  TRIPS=Object.keys(tm).sort().map(function(t){return {trip:t,list:tm[t].sort(function(a,b){return a.serial-b.serial;})};});
+  var all=Object.keys(SER).length,dn=Object.keys(SER).filter(function(s){return SER[s].st==="done";}).length;
+  $("bar").firstChild.style.width=(all?dn/all*100:0)+"%";
+  $("sum").textContent="確認済み "+dn+" / "+all+" パレット ("+(all?Math.round(dn/all*100):0)+"%)　一部 "+Object.keys(SER).filter(function(s){return SER[s].st==="part";}).length+"　未確認 "+(all-dn-Object.keys(SER).filter(function(s){return SER[s].st==="part";}).length);
+}
+var ST={done:"確認済み",part:"一部",none:"未確認"};
+function pass(o){var f=$("flt").value,q=$("q").value.trim().toUpperCase();
+  if(f&&o.st!==f)return false;
+  if(q&&String(o.serial).indexOf(q.replace(/^0+/,""))!==0&&!o.orders.some(function(x){return x.order.toUpperCase().indexOf(q)>=0;}))return false;return true;}
+function when(r){return r?r.at.slice(5,16).replace("-","/"):"";}
+function render(){
+  var list=Object.keys(SER).map(function(s){return SER[s];}).sort(function(a,b){return a.serial-b.serial;}).filter(pass);
+  var h="";
+  if(VIEW==="serial"){
+    h+='<div class="cards">'+list.map(function(o){return '<div class="card '+o.st+'" data-s="'+o.serial+'"><span class="sn">'+o.serial+'</span><span class="tr">'+esc(o.trip)+'　'+esc(o.item)+'</span><span class="chip '+o.st+'">'+ST[o.st]+(o.n>1?" "+o.nd+"/"+o.n:"")+'</span><span class="tr">'+o.orders.map(function(x){return esc(x.order);}).join(" ")+'</span><span></span><span class="by">'+(o.last?"✓ "+esc(o.last.by)+"　"+when(o.last):"")+(o.memo?' <span class="chip memo">未確認の記録あり</span>':'')+'</span></div>';}).join("")+'</div>';
+    h+='<div class="tbl"><table><thead><tr><th>通番</th><th>便</th><th>品名</th><th>オーダー</th><th>カートン番号</th><th>箱数</th><th>状態</th><th>確認者</th><th>確認日時</th><th>記録</th></tr></thead><tbody>'+
+      list.map(function(o){return '<tr class="r" data-s="'+o.serial+'"><td class="sn">'+o.serial+'</td><td>'+esc(o.trip)+'</td><td>'+esc(o.item)+'</td><td>'+o.orders.map(function(x){return esc(x.order);}).join("<br>")+'</td><td>'+o.orders.map(function(x){return x.from+"〜"+x.to;}).join("<br>")+'</td><td>'+o.boxes+'</td><td><span class="chip '+o.st+'">'+ST[o.st]+(o.n>1?" "+o.nd+"/"+o.n:"")+'</span>'+(o.memo?' <span class="chip memo">記録あり</span>':'')+'</td><td>'+(o.last?esc(o.last.by):"")+'</td><td>'+when(o.last)+'</td><td>'+o.recs.length+'</td></tr>';}).join("")+'</tbody></table></div>';
+  }else{
+    h+='<div class="trips">'+TRIPS.map(function(t){var ls=t.list.filter(pass);if(!ls.length)return "";var dn=t.list.filter(function(o){return o.st==="done";}).length;
+      return '<div class="trip"><h3>'+esc(t.trip)+'<span class="sp"></span><span class="chip '+(dn===t.list.length?"done":dn?"part":"none")+'">'+dn+' / '+t.list.length+'</span></h3><div class="mini"><div style="width:'+(dn/t.list.length*100)+'%"></div></div>'+
+        ls.map(function(o){return '<span class="sbtn '+o.st+'" data-s="'+o.serial+'">'+o.serial+'</span>';}).join("")+'</div>';}).join("")+'</div>';
+  }
+  $("main").innerHTML=h||"該当なし";
+  [].forEach.call(document.querySelectorAll("[data-s]"),function(e){e.onclick=function(){detail(e.dataset.s);};});
+}
+$("tSerial").onclick=function(){VIEW="serial";this.classList.add("on");$("tTrip").classList.remove("on");render();};
+$("tTrip").onclick=function(){VIEW="trip";this.classList.add("on");$("tSerial").classList.remove("on");render();};
+$("flt").onchange=render;$("q").oninput=render;
+/* ---------- 詳細 ---------- */
+var curS=null;
+function detail(s){
+  curS=s;var o=SER[s];$("detT").textContent="通番 "+s+"　"+o.trip+"　"+o.item;
+  var h='<div class="box"><span class="chip '+o.st+'" style="font-size:18px">'+ST[o.st]+'</span>　箱 '+o.boxes+'　オーダー '+o.n+'</div>';
+  h+=o.orders.map(function(x){var r=x.last;
+    return '<div class="box"><h4>'+esc(x.order)+'　カートン '+x.from+'〜'+x.to+' ('+(x.from&&x.to?x.to-x.from+1:"-")+' 箱)　<span class="chip '+(x.done?"done":"none")+'">'+(x.done?"確認済み":"未確認")+'</span></h4>'+
+      (r?'<div>最後の記録: '+esc(r.at)+'　'+esc(r.by)+'　'+esc(r.kind)+'　'+r.from+'〜'+r.to+(r.note?'　'+esc(r.note):'')+'</div>':'<div>記録なし</div>')+
+      (admin?'<div class="adm"><button data-a="1" data-o="'+esc(x.order)+'">確認済みにする</button><button class="ng" data-a="0" data-o="'+esc(x.order)+'">確認を取り消す</button></div>':'')+'</div>';}).join("");
+  h+='<div class="box"><h4>記録の履歴 ('+o.recs.length+' 件)</h4><ul class="hist">'+(o.recs.slice().reverse().map(function(r){
+    var ph=String(r.photos||"").split(/\s+/).filter(Boolean).map(function(u,i){return '<a href="'+esc(u)+'" target="_blank">写真'+(i+1)+'</a>';}).join(" ");
+    return '<li><b>'+esc(r.at)+'</b>　'+esc(r.by)+'　'+(r.kind==="取消"?"確認取消":r.confirmed?"☑ 確認":"□ 記録(未確認)")+'　'+esc(r.order)+' '+r.from+'〜'+r.to+(r.scanSrc?'　番号: '+esc(r.scanSrc):'')+(r.note?'　'+esc(r.note):'')+(ph?'　'+ph:'')+'</li>';}).join("")||"<li>なし</li>")+'</ul></div>';
+  if(!admin)h+='<div style="color:#868e96;font-size:13px">確認の状態を変えられるのは管理者だけです。</div>';
+  $("detB").innerHTML=h;$("det").classList.remove("hidden");window.scrollTo(0,0);
+  [].forEach.call(document.querySelectorAll("[data-a]"),function(b){b.onclick=function(){askAdmin(s,b.dataset.o,b.dataset.a==="1");};});
+}
+$("back").onclick=function(){$("det").classList.add("hidden");curS=null;};
+function askAdmin(s,order,conf){
+  $("dlgM").textContent="通番 "+s+" / "+order+" を"+(conf?"確認済みにします":"未確認に戻します (確認を取り消す)")+"。よろしいですか。";$("dlgR").value="";$("dlg").classList.remove("hidden");
+  $("dlgNo").onclick=function(){$("dlg").classList.add("hidden");};
+  $("dlgOk").onclick=function(){$("dlg").classList.add("hidden");$("detT").textContent="送信中…";
+    post({action:"adminSet",serial:s,order:order,confirmed:conf,reason:$("dlgR").value}).then(function(j){
+      if(!j.ok){alert(j.error==="not_admin"?"管理者だけが変更できます":"変更できませんでした: "+j.error);detail(s);return;}
+      post({action:"records"}).then(function(k){DATA=k;build();render();detail(s);$("upd").textContent="更新 "+k.at.slice(11,16);});
+    }).catch(function(){alert("通信エラー");detail(s);});};
+}
+/* ---------- 開始 ---------- */
+(function(){var t=null;try{t=localStorage.getItem(TOKEN_KEY);}catch(e){}if(t)login(t);else showLogin();})();
+</script>
+</body>
+</html>
