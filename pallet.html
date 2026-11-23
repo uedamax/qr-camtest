@@ -196,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.39版 / 2026-11-23 / 映像が止まったら動かし直す。重い読み直しをやめた。2 段階で読む (① QR を近づけて → ② 離して文字)</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.40版 / 2026-11-23 / 画像は作業の通信が無いときだけ裏で送る (記録を待たせない)。画像を小さく。映像が止まったら動かし直す。2 段階で読む</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -278,10 +278,10 @@ var small=document.createElement("canvas"),sctx=small.getContext("2d",{willReadF
 /* 第1.21版: 読めた瞬間のカメラの 1 コマを取っておき、記録と一緒にサーバへ送る (carton / label) */
 var photos={};
 function snap(kind){
-  try{if(!full.width)return;var s=Math.min(1,1024/Math.max(full.width,full.height));
+  try{if(!full.width)return;var s=Math.min(1,800/Math.max(full.width,full.height));   /* 第1.40版: 1024 → 800 画素・画質 0.6 (送る量を約半分に) */
     var c=document.createElement("canvas");c.width=Math.round(full.width*s);c.height=Math.round(full.height*s);
     c.getContext("2d").drawImage(full,0,0,c.width,c.height);
-    photos[kind]=c.toDataURL("image/jpeg",0.7).split(",")[1];
+    photos[kind]=c.toDataURL("image/jpeg",0.6).split(",")[1];
     log("画像 "+(kind==="carton"?"カートンラベル":"パレットラベル")+" "+Math.round(photos[kind].length*0.75/1024)+"KB");
   }catch(e){log("画像を取れません: "+e.message);}
 }
@@ -296,13 +296,20 @@ function flushPhotos(){
   if(pend.items.length&&pend.serial){upq.push({serial:pend.serial,items:pend.items,tries:0});log("画像を送る予定に入れました 通番 "+pend.serial+" "+pend.items.length+"枚");}
   pend={serial:"",items:[]};upNext();
 }
+/* 第1.40版: 画像は作業の通信 (記録・通番の問い合わせなど) が無いときだけ送る。作業の通信が始まったら、送っている画像を止めて後で送り直す
+   (スマホの送信の回線を画像が占めて、作業の通信が待たされないようにする) */
+var upCtl=null,upAborted=false;
+function pauseUpload(){if(upBusy&&upCtl){upAborted=true;try{upCtl.abort();}catch(e){}}}
 function upNext(){
   drawUp();if(upBusy||!upq.length||!token)return;
-  upBusy=true;var job=upq[0];
-  fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"photos",token:token,serial:job.serial,items:job.items})})
+  if(Object.keys(tasks).length){setTimeout(upNext,1500);return;}   /* 作業の通信中は待つ */
+  upBusy=true;upAborted=false;var job=upq[0];
+  upCtl=window.AbortController?new AbortController():null;
+  fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"photos",token:token,serial:job.serial,items:job.items}),signal:upCtl?upCtl.signal:undefined})
   .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
-  .then(function(j){if(!j.ok)throw new Error(j.error);upq.shift();upBusy=false;log("画像を保存しました 通番 "+job.serial+" "+j.saved+"枚");upNext();})
+  .then(function(j){if(!j.ok)throw new Error(j.error);upq.shift();upBusy=false;log("画像を保存しました 通番 "+job.serial+" "+j.saved+"枚");setTimeout(upNext,500);})
   .catch(function(e){
+    if(upAborted){upBusy=false;upAborted=false;log("画像の送信を一時止めました (作業の通信を先に)");drawUp();setTimeout(upNext,3000);return;}
     upBusy=false;job.tries++;log("画像の送信に失敗 ("+job.tries+"回目): "+e.message);
     if(job.tries>=5){upq.shift();log("画像の送信をやめました 通番 "+job.serial+" (記録は残っています)");}
     drawUp();setTimeout(upNext,job.tries>=5?0:Math.min(60000,5000*job.tries));
@@ -512,6 +519,7 @@ $("toast").addEventListener("click",function(){this.classList.add("hidden");});
 
 function api(body,btn,btnText){
   body.token=token;
+  pauseUpload();   /* 第1.40版: 作業の通信を先にする */
   var id=busyStart(body.action,LBL[body.action]||"通信中");
   if(btn){tasks[id].btn=btn;tasks[id].btnText=btnText||"処理中…";btn.disabled=true;btn.classList.add("working");drawBusy();}
   return fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
