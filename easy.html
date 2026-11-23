@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.12版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す。1.11: 済んだらやることを消す。1.12: 判定に失敗したら読み直す・最初からやり直すボタン・版数を右上に)
+  パレット確認 簡易版 第1.13版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す。1.11: 済んだらやることを消す。1.12: 判定に失敗したら読み直す・最初からやり直すボタン・版数を右上に。1.13: 読めた情報を出す)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (OK で次へ)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -29,6 +29,11 @@ body{margin:0;font-family:system-ui,-apple-system,"Hiragino Sans","BIZ UDPGothic
 #todo{margin:0 0 6px;padding:10px 12px;font-size:23px;font-weight:bold;line-height:1.3;background:#ffd43b;color:#111}
 #todo small{display:block;font-size:13px;color:#555}
 #todo.done{background:#333;color:#333}
+#info{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;padding:8px 12px;font-size:17px;background:#1a1a1a}
+#info:empty{display:none}
+#info .k{color:#999}
+#info .v{font-weight:bold;color:#fff}
+#info .t{color:#777;font-weight:normal}
 #say{margin:0;padding:10px 12px;font-size:20px;font-weight:bold;line-height:1.35;background:#222;color:#ccc;min-height:48px}
 #say.ng{background:#e03131;color:#fff}
 #say.ok{background:#2f9e44;color:#fff}
@@ -52,11 +57,12 @@ button.warn{background:#fd7e14;color:#111}
 </style>
 </head>
 <body>
-<div id="top"><span id="who" style="font-size:18px;font-weight:bold;color:#fff">未ログイン</span><span id="ver" style="background:#1c7ed6;color:#fff;border-radius:8px;padding:2px 8px;font-weight:bold">簡易版 1.12</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="vbtn" style="font-size:13px;padding:4px 8px">音声 OFF</button><button id="out" class="hidden" style="font-size:13px;padding:4px 8px">ログアウト</button></div>
+<div id="top"><span id="who" style="font-size:18px;font-weight:bold;color:#fff">未ログイン</span><span id="ver" style="background:#1c7ed6;color:#fff;border-radius:8px;padding:2px 8px;font-weight:bold">簡易版 1.13</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="vbtn" style="font-size:13px;padding:4px 8px">音声 OFF</button><button id="out" class="hidden" style="font-size:13px;padding:4px 8px">ログアウト</button></div>
 <div id="steps"><span id="s1">①QR</span><span id="s2">②全体</span><span id="s3">③数</span><span id="s4">④パレット</span></div>
 <div id="todo"><small>やること</small>「開始」を押す</div>
 <div id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas><button id="startBtn" class="go" style="position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);width:70%;margin:0;font-size:34px;padding:26px 0;z-index:3">開始</button></div>
 <p id="say"></p>
+<div id="info"></div>
 <button id="redo" class="hidden" style="width:calc(100% - 24px);margin:8px 12px 0;background:#495057;font-size:18px;padding:10px">最初からやり直す (① へ)</button>
 <div id="panel">
   <!-- ② で文字が読めないとき: 手で入れる -->
@@ -76,7 +82,7 @@ button.warn{background:#fd7e14;color:#111}
 </div>
 <div id="toast" class="hidden" style="position:fixed;left:8px;right:8px;top:8px;background:#2f9e44;color:#fff;font-weight:bold;font-size:18px;padding:10px;border-radius:10px;z-index:8;text-align:center"></div>
 <div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button><button id="dlgNo" class="hidden" style="background:#868e96;margin-top:10px;width:100%;font-size:22px">もう一度確認する</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.12版 / 2026-11-23 (やり直しボタン・版数を右上に) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="foot">パレット確認 簡易版 第1.13版 / 2026-11-23 (読めた情報を出す) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -99,6 +105,7 @@ document.addEventListener("click",function(){var c=audioCtx();if(c&&c.state==="s
 function say(t,cls,vid){var s=$("say");if(s.textContent!==t&&vid)voice(vid);s.textContent=t;s.className=cls||"";}
 var STEP=0;   /* 0 ログイン / 1 QR / 2 全体 / 3 数 / 4 パレット / 5 終わり */
 function setStep(n){
+  setTimeout(showInfo,0);
   STEP=n;["s1","s2","s3","s4"].forEach(function(id,i){var e=$(id);e.className=(i+1===n)?"on":(i+1<n?"done":"");});
   $("count").classList.toggle("hidden",n!==3);
   $("manual").classList.add("hidden");
@@ -250,7 +257,7 @@ function ocrOne(k,c){
 }
 /* ---------- 1 件分の状態 ---------- */
 var cur,s2At=0;
-function reset(){cur={qr:null,pq:null,votes:{num:{},ord:{}},fixed:{num:null,ord:null},order:null,row:null,photos:[]};}
+function reset(){setTimeout(showInfo,0);cur={qr:null,pq:null,votes:{num:{},ord:{}},fixed:{num:null,ord:null},order:null,row:null,photos:[]};}
 reset();
 function parseQR(t){t=String(t).trim().replace(/'+$/,"");var f=t.split(",");if(f.length<6)return null;return {id:f[0],pn:f[3],name:f[4]};}
 function snap(kind){try{var s=Math.min(1,800/Math.max(full.width,full.height)),c=document.createElement("canvas");c.width=Math.round(full.width*s);c.height=Math.round(full.height*s);
@@ -267,6 +274,20 @@ function decide(num,ord){
   checkDone(hit.serial,o.order);
   flash("✓ 文字を読みました (箱 "+num+")",function(){setStep(3);});
 }
+/* 第1.13版: 読めた情報を、結果の欄の下に出す (確定前の読み途中は灰色) */
+function best(k){var vs=cur.votes[k],b=null,n=0;for(var x in vs)if(vs[x]>n){n=vs[x];b=x;}return b;}
+function showInfo(){
+  var h=[];function row(k,v){h.push('<span class="k">'+k+'</span><span class="v">'+v+'</span>');}
+  if(cur.pq){row("QR",esc(cur.pq.pn)+"　"+esc(cur.pq.name));}
+  if(cur.pq&&(STEP>=2)){
+    var bn=cur.fixed.num||best("num"),bo=cur.fixed.ord||best("ord");
+    row("箱番号",cur.fixed.num?esc(cur.fixed.num):(bn?'<span class="t">'+esc(bn)+' (読み途中)</span>':'<span class="t">-</span>'));
+    row("オーダー下4桁",cur.fixed.ord?esc(cur.fixed.ord):(bo?'<span class="t">'+esc(bo)+' (読み途中)</span>':'<span class="t">-</span>'));
+  }
+  if(cur.order&&cur.row){row("通番",esc(String(Number(cur.row.serial))));row("オーダー",esc(cur.order.order));}
+  if(cur.label)row("パレットラベル","通番 "+esc(cur.label));
+  $("info").innerHTML=h.join("");
+}
 /* 第1.12版: 判定に失敗したら、文字の読み取りをやり直す (同じ結果で止まらない) */
 function rereadOcr(){cur.fixed={num:null,ord:null};cur.votes={num:{},ord:{}};cur.manual=false;}
 $("redo").onclick=function(){reset();$("cSerial").value="";$("manual").classList.add("hidden");say("最初からやり直します","");setStep(1);};
@@ -278,7 +299,7 @@ $("mOk").onclick=function(){var n=$("mNum").value.replace(/\D/g,""),o=$("mOrd").
 function onLabel(txt){
   var sn=String(Number($("cSerial").value||0)),m=/^MVP,0[12],(\d{1,4}),/.exec(txt+",");
   if(m&&String(Number(m[1]))!==sn){say("ラベルの通番 "+Number(m[1])+" ≠ "+sn,"ng","labelng");return;}
-  snap("label");flash("✓ パレットラベルを読みました",function(){finish(sn,m?"":"手書きラベル");});
+  cur.label=m?String(Number(m[1])):"手書き";showInfo();snap("label");flash("✓ パレットラベルを読みました",function(){finish(sn,m?"":"手書きラベル");});
 }
 function finish(sn,note){
   var o=cur.order;var photos=cur.photos.map(function(p){p.order=o.order;return p;});
@@ -312,7 +333,7 @@ function tick(){
     var g=guide(LABEL,10,0.94).v,q=[{x:g.x,y:g.y},{x:g.x+g.z,y:g.y},{x:g.x+g.z,y:g.y+g.z},{x:g.x,y:g.y+g.z}];
     var cn=crop(q,BOX.num),co=crop(q,BOX.ord);
     (cur.fixed.num||!cn?Promise.resolve():ocrOne("num",cn)).then(function(){return cur.fixed.ord||!co?null:ocrOne("ord",co);}).then(function(){
-      busy=false;if(STEP!==2)return;
+      busy=false;showInfo();if(STEP!==2)return;
       if(cur.fixed.num&&cur.fixed.ord){decide(cur.fixed.num,cur.fixed.ord);return;}
       if(Date.now()-s2At>10000)$("manual").classList.remove("hidden");   /* 10 秒読めなければ、手で入れる欄を出す */
     }).catch(function(){busy=false;});
@@ -335,7 +356,7 @@ function tick(){
     if(want&&kind!==want){hint("これは"+QNAME[kind]+"。"+QNAME[want]+"を緑の枠に");return;}
     if(STEP===0){if(txt!==token)tryToken(txt);return;}
     if(STEP===1){var pq=parseQR(txt);
-      cur.qr=txt;cur.pq=pq;snap("carton");log("QR "+pq.pn);flash("✓ カートンラベルの QR を読みました",function(){setStep(2);});return;}
+      cur.qr=txt;cur.pq=pq;showInfo();snap("carton");log("QR "+pq.pn);flash("✓ カートンラベルの QR を読みました",function(){setStep(2);});return;}
     if(STEP===4&&/^MVPH?,\d{2},/.test(txt))onLabel(txt);
   }).catch(function(){busy=false;});
 }
