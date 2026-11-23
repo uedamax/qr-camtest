@@ -196,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.38版 / 2026-11-23 / 2 段階で読む: ① QR を緑の四角に近づけて読む → ② 少し離してラベル全体を白い枠に合わせ、文字を読む</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.39版 / 2026-11-23 / 映像が止まったら動かし直す。重い読み直しをやめた。2 段階で読む (① QR を近づけて → ② 離して文字)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -1101,6 +1101,8 @@ function cropQR(vw,vh){
 
 /* ---------- 毎フレーム ---------- */
 function tick(){
+  /* 第1.39版: iPhone では確かめの画面 (confirm) などのあとで映像が止まったままになることがあるので、止まっていたら動かし直す */
+  if(stream&&video.paused){try{var pp=video.play();if(pp&&pp.catch)pp.catch(function(){});}catch(e){}}
   drawGuide();renderScan();
   if(busy||!stream||video.readyState<2||!window.ZXingWASM)return;
   var vw=video.videoWidth,vh=video.videoHeight;if(!vw)return;
@@ -1112,7 +1114,8 @@ function tick(){
   .then(function(res){
     /* 第1.37版: ラベル全体を枠に合わせると、カートンラベルの QR (49×49 セル) は縮めた映像では 1 セル 2 画素ほどで読めない。
        見つからないときは、緑の四角のあたりを縮めずに切り出して拡大し、もう一度探す */
-    if((!res||!res.length||!res[0].isValid)&&token&&st.pq&&!labelMode()){
+    /* 第1.39版: 2 段目は白い枠の位置から文字を読むので、この拡大して読み直す処理 (重く、映像が止まる元) はやめた */
+    if(false&&(!res||!res.length||!res[0].isValid)&&token&&st.pq&&!labelMode()){
       var cr=cropQR(vw,vh);
       if(cr)return ZXingWASM.readBarcodes(cr.data,{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1}).then(function(r2){
         if(!r2||!r2.length||!r2[0].isValid)return res;
@@ -1130,7 +1133,7 @@ function tick(){
         if(g){
           var gq=[{x:g.x,y:g.y},{x:g.x+g.z,y:g.y},{x:g.x+g.z,y:g.y+g.z},{x:g.x,y:g.y+g.z}];
           var gn=crop(gq,BOX.num),go=crop(gq,BOX.ord);
-          if(gn)$("numMini").src=gn.toDataURL();if(go)$("ordMini").src=go.toDataURL();
+          if(Date.now()-(window.__miniAt||0)>1000){window.__miniAt=Date.now();if(gn)$("numMini").src=gn.toDataURL();if(go)$("ordMini").src=go.toDataURL();}   /* 小さな絵の更新は 1 秒に 1 回 (重いので) */
           var g1=(!st.fixed.num&&gn)?ocrOne("num",gn):Promise.resolve(null);
           return g1.then(function(){return (!st.fixed.ord&&go)?ocrOne("ord",go):null;}).then(function(){
             renderScan();
