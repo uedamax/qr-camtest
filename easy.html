@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.14版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す。1.11: 済んだらやることを消す。1.12: 判定に失敗したら読み直す・最初からやり直すボタン・版数を右上に。1.13: 読めた情報を出す。1.14: 認証 QR が読めたらすぐに名前を出す・失敗の理由を出す)
+  パレット確認 簡易版 第1.15版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す。1.11: 済んだらやることを消す。1.12: 判定に失敗したら読み直す・最初からやり直すボタン・版数を右上に。1.13: 読めた情報を出す。1.14: 認証 QR が読めたらすぐに名前を出す・失敗の理由を出す。1.15: 上にログインの状態を出す)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (OK で次へ)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -57,7 +57,7 @@ button.warn{background:#fd7e14;color:#111}
 </style>
 </head>
 <body>
-<div id="top"><span id="who" style="font-size:18px;font-weight:bold;color:#fff">未ログイン</span><span id="ver" style="background:#1c7ed6;color:#fff;border-radius:8px;padding:2px 8px;font-weight:bold">簡易版 1.14</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="vbtn" style="font-size:13px;padding:4px 8px">音声 OFF</button><button id="out" class="hidden" style="font-size:13px;padding:4px 8px">ログアウト</button></div>
+<div id="top"><span id="who" style="font-size:17px;font-weight:bold;color:#fff;background:#c92a2a;border-radius:8px;padding:2px 8px">未ログイン</span><span id="ver" style="background:#1c7ed6;color:#fff;border-radius:8px;padding:2px 8px;font-weight:bold">簡易版 1.15</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="vbtn" style="font-size:13px;padding:4px 8px">音声 OFF</button><button id="out" class="hidden" style="font-size:13px;padding:4px 8px">ログアウト</button></div>
 <div id="steps"><span id="s1">①QR</span><span id="s2">②全体</span><span id="s3">③数</span><span id="s4">④パレット</span></div>
 <div id="todo"><small>やること</small>「開始」を押す</div>
 <div id="stage"><video id="video" playsinline muted></video><canvas id="ov"></canvas><button id="startBtn" class="go" style="position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);width:70%;margin:0;font-size:34px;padding:26px 0;z-index:3">開始</button></div>
@@ -82,7 +82,7 @@ button.warn{background:#fd7e14;color:#111}
 </div>
 <div id="toast" class="hidden" style="position:fixed;left:8px;right:8px;top:8px;background:#2f9e44;color:#fff;font-weight:bold;font-size:18px;padding:10px;border-radius:10px;z-index:8;text-align:center"></div>
 <div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button><button id="dlgNo" class="hidden" style="background:#868e96;margin-top:10px;width:100%;font-size:22px">もう一度確認する</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.14版 / 2026-11-23 (ログインをすぐ知らせる) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="foot">パレット確認 簡易版 第1.15版 / 2026-11-23 (上にログインの状態) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -135,19 +135,22 @@ function checkDone(sn,order){
 }
 /* ---------- 通信 ---------- */
 function post(body){body.token=token;return fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});}
+/* 第1.15版: ログインの状態を上に出す (ログイン中: 名前 / 確認中 / 未ログイン) */
+function setWho(st){var w=$("who");if(st==="check"){w.textContent="ログイン確認中…";w.style.background="#e8590c";}
+  else if(st){w.textContent="ログイン中: "+st;w.style.background="#2f9e44";}else{w.textContent="未ログイン";w.style.background="#c92a2a";}}
 /* 第1.14版: 認証 QR が読めたら、すぐに名前のダイアログを出す (リストの読み込みは裏で。待たせない) */
 var listsReady=false,afterLists=null;
 function tryToken(t){
-  token=t;say("認証 QR を読みました。確認中…","");
+  token=t;setWho("check");say("認証 QR を読みました。確認中…","");
   post({action:"whoami"}).then(function(j){
-    if(!j.ok){token=null;try{localStorage.removeItem(TOKEN_KEY);}catch(e){}say("この認証 QR は使えません (登録されていないか、止められています)","ng","badtoken");return;}
+    if(!j.ok){token=null;setWho("");try{localStorage.removeItem(TOKEN_KEY);}catch(e){}say("この認証 QR は使えません (登録されていないか、止められています)","ng","badtoken");return;}
     try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}
-    userName=j.name;$("who").textContent=j.name;$("out").classList.remove("hidden");
+    userName=j.name;setWho(j.name);$("out").classList.remove("hidden");
     say("✓ ログインしました: "+j.name,"ok");loadLists();
     dialog("✓ ログインしました<br><span style=\"font-size:38px\">"+esc(userName)+"</span><br><small>次に、カートンラベルの QR を<br>緑の四角に近づけて読んでください</small>",function(){
       if(listsReady)setStep(1);else{say("準備中… (リストを読み込んでいます)","");afterLists=function(){setStep(1);};}
     });
-  }).catch(function(e){token=null;say("通信エラー (電波を確認して、もう一度認証 QR を)","ng","neterr");log("whoami 失敗 "+e.message);});
+  }).catch(function(e){token=null;setWho("");say("通信エラー (電波を確認して、もう一度認証 QR を)","ng","neterr");log("whoami 失敗 "+e.message);});
 }
 function loadLists(){
   listsReady=false;
@@ -157,7 +160,7 @@ function loadLists(){
 }
 function drawV(){$("vbtn").textContent=voiceOn?"音声 ON":"音声 OFF";$("vbtn").style.background=voiceOn?"#2f9e44":"#444";}drawV();
 $("vbtn").onclick=function(){voiceOn=!voiceOn;try{localStorage.setItem("easy_voice",voiceOn?"on":"off");}catch(e){}drawV();};
-$("out").onclick=function(){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;$("who").textContent="未ログイン";$("out").classList.add("hidden");setStep(0);say("ログアウトしました","");};
+$("out").onclick=function(){try{localStorage.removeItem(TOKEN_KEY);}catch(e){}token=null;setWho("");$("out").classList.add("hidden");setStep(0);say("ログアウトしました","");};
 /* 記録は裏で送る (失敗したら送り直す) */
 var saveq=[],saveBusy=false;
 function badge(){var b=$("badge"),n=saveq.length+upq.length;b.textContent=n?("送信中 "+n):"";b.classList.toggle("hidden",!n);}
