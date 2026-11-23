@@ -196,7 +196,7 @@ button.finishbtn{flex:1;background:#e65100;border-color:#e65100;color:#fff;font-
  <div class="row"><button id="fixClose">閉じる</button></div>
 </div>
 <div class="top">
- <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.40版 / 2026-11-23 / 画像は作業の通信が無いときだけ裏で送る (記録を待たせない)。画像を小さく。映像が止まったら動かし直す。2 段階で読む</div></h1>
+ <h1>パレット確認(引っ越し用・試作)<div class="ver">第1.42版 / 2026-11-23 / 映像が 2 秒止まったらカメラを自動で入れ直す。終了の記録は裏で送り待たせない。今やることを映像の上に大きく (① → ② → ③)</div></h1>
  <div class="who" id="who">未ログイン</div>
  <button id="voice" type="button">音声 ON</button>
  <button id="logout" class="hidden">ログアウト</button>
@@ -299,10 +299,31 @@ function flushPhotos(){
 /* 第1.40版: 画像は作業の通信 (記録・通番の問い合わせなど) が無いときだけ送る。作業の通信が始まったら、送っている画像を止めて後で送り直す
    (スマホの送信の回線を画像が占めて、作業の通信が待たされないようにする) */
 var upCtl=null,upAborted=false;
+/* 第1.41版: パレットラベルで終了するときの記録は、この順番待ちに入れて裏で送る。失敗したら送り直す */
+var saveq=[],saveBusy=false;
+function bgSave(req){saveq.push({req:req,tries:0});log("記録を送る予定に入れました 通番 "+req.serial+" "+req.order+" "+req.from+"-"+req.to);runSaveQ();}
+function runSaveQ(){
+  drawUp();if(saveBusy||!saveq.length||!token)return;
+  saveBusy=true;var job=saveq[0];var body={action:"saveRange",token:token};for(var k in job.req)body[k]=job.req[k];
+  fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(body)})
+  .then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
+  .then(function(j){
+    saveBusy=false;
+    if(!j.ok&&j.error==="already_confirmed"){saveq.shift();log("記録しませんでした (確認済み) 通番 "+job.req.serial+" "+j.by);
+      toast("通番 "+job.req.serial+" は確認済みでした","info",j.by+" が "+String(j.at||"").slice(11,16)+" に確認済み (二重には記録しません)");}
+    else if(!j.ok)throw new Error(j.error);
+    else{saveq.shift();log("記録しました (裏) 通番 "+job.req.serial+" "+job.req.order+" "+job.req.from+"-"+job.req.to);}
+    drawUp();runSaveQ();upNext();
+  }).catch(function(e){
+    saveBusy=false;job.tries++;log("記録の送信に失敗 ("+job.tries+"回目): "+e.message);
+    if(job.tries>=8){saveq.shift();toast("記録を送れませんでした","ng","通番 "+job.req.serial+" をもう一度記録してください (タップで閉じる)");say("記録に失敗しました",true);}
+    drawUp();setTimeout(runSaveQ,Math.min(30000,3000*job.tries));
+  });
+}
 function pauseUpload(){if(upBusy&&upCtl){upAborted=true;try{upCtl.abort();}catch(e){}}}
 function upNext(){
   drawUp();if(upBusy||!upq.length||!token)return;
-  if(Object.keys(tasks).length){setTimeout(upNext,1500);return;}   /* 作業の通信中は待つ */
+  if(Object.keys(tasks).length||saveq.length||saveBusy){setTimeout(upNext,1500);return;}   /* 作業の通信中・記録を送っている間は待つ */
   upBusy=true;upAborted=false;var job=upq[0];
   upCtl=window.AbortController?new AbortController():null;
   fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({action:"photos",token:token,serial:job.serial,items:job.items}),signal:upCtl?upCtl.signal:undefined})
@@ -317,11 +338,13 @@ function upNext(){
 }
 function drawUp(){
   var b=$("upBadge");if(!b)return;var n=0;upq.forEach(function(j){n+=j.items.length;});
-  b.textContent=n?("画像送信中 "+n+"枚"):"";b.classList.toggle("hidden",!n);
+  var m=(typeof saveq!=="undefined")?saveq.length:0;
+  b.textContent=(m?("記録送信中 "+m+"件 "):"")+(n?("画像送信中 "+n+"枚"):"");b.classList.toggle("hidden",!n&&!m);
 }
 window.addEventListener("online",upNext);
 document.addEventListener("visibilitychange",function(){if(!document.hidden)upNext();});
-window.addEventListener("beforeunload",function(e){if(upq.length||pend.items.length){e.preventDefault();e.returnValue="";}});
+window.addEventListener("online",function(){runSaveQ();});
+window.addEventListener("beforeunload",function(e){if(upq.length||pend.items.length||saveq.length){e.preventDefault();e.returnValue="";}});
 var stream=null,timer=null,busy=false,worker=null,workerReady=false,lastQuad=null,lastSeen=0;
 var token=null,userName="",ORDERS=null,SUMI=[];
 
@@ -874,7 +897,28 @@ function finishPallet(src){
     var ng=[].slice.call(document.querySelectorAll("#checks li.ng")).map(function(li){return li.textContent;})[0];
     setStatus("まだ終了できません: "+(ng||"オーダーと範囲を入れてください"),"ng");return;
   }
-  finishing=true;var sn=serial();log("終了("+src+") 通番 "+sn);
+  var sn=serial();log("終了("+src+") 通番 "+sn);
+  /* 第1.41版: 記録は裏で送り、返事を待たずに次へ進む (保存中で待たせない。確かめの画面も出さない) */
+  if(true){
+    var od=cur.order.order;
+    bgSave({serial:sn,order:od,from:+$("from").value,to:+$("to").value,scanned:st.fixed.num||"",scanSrc:st.fixed.num?(st.manual.num?"手入力":"OCR"):"未読取",confirmed:true,qrId:st.pq?st.pq.id:"",note:$("note").value});
+    keepPhotos(sn,od);
+    var snb=String(Number(sn)),doneb={};doneb[od]=1;
+    ((cur.info&&cur.info.records)||[]).forEach(function(r){if(r.kind!=="取消")doneb[r.order]=1;});
+    (window.__doneOrders=window.__doneOrders||{})[snb]=Object.assign(window.__doneOrders[snb]||{},doneb);
+    Object.assign(doneb,window.__doneOrders[snb]);
+    var restb=SUMI.filter(function(r){return r.serial===snb&&!doneb[r.order];});
+    if(restb.length){
+      $("from").value="";$("to").value="";$("note").value="";$("confirmed").checked=false;justSaved=null;cur.order=null;
+      serialOnly();setStatus("通番 "+snb+" の残り "+restb.length+" オーダーを選んで記録","warn");
+      $("ordSel").scrollIntoView({block:"center",behavior:"smooth"});return;
+    }
+    setStatus("通番 "+sn+" の確認を終了しました","ok");
+    flushPhotos();
+    setTimeout(goNext,1500);
+    return;
+  }
+  finishing=true;
   doSave(function(ok){
     finishing=false;
     if(!ok)return;
@@ -1037,6 +1081,12 @@ function prepWorker(){
 }
 
 /* ---------- 重ね描き ---------- */
+/* 第1.41版: 今やることを、映像の上の帯に大きく出す (① QR を近づける → ② 離してラベル全体 → ③ パレットラベル) */
+function banner(t,W){
+  octx.setLineDash([]);octx.font="bold 20px sans-serif";
+  var y=58,h=34;octx.fillStyle="rgba(0,0,0,.72)";octx.fillRect(0,y,W,h);
+  octx.fillStyle="#ffe066";octx.textBaseline="middle";octx.fillText(t,10,y+h/2,W-20);octx.textBaseline="alphabetic";
+}
 function drawGuide(){
   var W=video.clientWidth,H=video.clientHeight;if(!W||!H)return;
   var dpr=window.devicePixelRatio||1;
@@ -1051,7 +1101,7 @@ function drawGuide(){
     function r2(b,col,dash,lw){octx.setLineDash(dash||[]);octx.strokeStyle=col;octx.lineWidth=lw||2;octx.strokeRect(ox2+b.u0*s2,oy2+b.v0*s2,(b.u1-b.u0)*s2,(b.v1-b.v0)*s2);}
     r2(PLABEL,"rgba(255,255,255,.9)");r2(PSERIAL,"rgba(255,255,255,.6)",[6,4]);r2({u0:0,v0:0,u1:1,v1:1},"rgba(76,195,138,.95)",null,3);
     octx.setLineDash([]);octx.font="bold 14px sans-serif";octx.fillStyle="#fff";
-    octx.fillText("パレットラベル全体を白い枠に",ox2+PLABEL.u0*s2+6,oy2+PLABEL.v0*s2+18);
+    banner("③ パレットラベル全体を白い枠に",W);
     octx.fillStyle="#4cc38a";octx.fillText("QR",ox2+2,oy2-6);
     if(lastQuad&&video.videoWidth&&Date.now()-lastSeen<1500){
       var k2=Math.max(W/video.videoWidth,H/video.videoHeight),dx2=(W-video.videoWidth*k2)/2,dy2=(H-video.videoHeight*k2)/2,q2=lastQuad;
@@ -1064,7 +1114,7 @@ function drawGuide(){
   if(!st.pq){
     var qs=Math.min(W*0.62,(H-100)*0.62),qx=(W-qs)/2,qy=56+((H-100)-qs)/2;
     octx.setLineDash([]);octx.strokeStyle="rgba(76,195,138,.95)";octx.lineWidth=4;octx.strokeRect(qx,qy,qs,qs);
-    octx.font="bold 15px sans-serif";octx.fillStyle="#fff";octx.fillText("① まず QR をこの四角に近づける",qx,qy-8);
+    banner("① QR をこの緑の四角いっぱいに近づける",W);
     if(lastQuad&&video.videoWidth&&Date.now()-lastSeen<1500){
       var k0=Math.max(W/video.videoWidth,H/video.videoHeight),dx0=(W-video.videoWidth*k0)/2,dy0=(H-video.videoHeight*k0)/2;
       octx.beginPath();lastQuad.forEach(function(p,i){var x=p.x*k0+dx0,y=p.y*k0+dy0;if(i)octx.lineTo(x,y);else octx.moveTo(x,y);});octx.closePath();
@@ -1074,7 +1124,7 @@ function drawGuide(){
   }
   var lw=LABEL.u1-LABEL.u0,lh=LABEL.v1-LABEL.v0;var top0=56,bot0=44;var s=Math.min(W*0.9/lw,(H-top0-bot0)*0.95/lh);
   var ox=(W-lw*s)/2-LABEL.u0*s,oy=top0+((H-top0-bot0)-lh*s)/2-LABEL.v0*s;
-  octx.font="bold 15px sans-serif";octx.fillStyle="#fff";octx.fillText("② 少し離して、ラベル全体を白い枠に",ox+LABEL.u0*s,oy+LABEL.v0*s-8);
+  banner(st.fixed.num&&st.fixed.ord?"③ パレットラベルを読む (下のボタン)":"② 少し離して、ラベル全体を白い枠に",W);
   function r(b,col,dash){octx.setLineDash(dash||[]);octx.strokeStyle=col;octx.lineWidth=2;octx.strokeRect(ox+b.u0*s,oy+b.v0*s,(b.u1-b.u0)*s,(b.v1-b.v0)*s);}
   r(LABEL,"rgba(255,255,255,.85)");r({u0:0,v0:0,u1:1,v1:1},"rgba(76,195,138,.95)");
   r(BOX.num,"rgba(239,83,80,.8)",[6,4]);r(BOX.ord,"rgba(66,165,245,.8)",[6,4]);octx.setLineDash([]);
@@ -1107,17 +1157,34 @@ function cropQR(vw,vh){
   return {data:cqx.getImageData(0,0,cq.width,cq.height),x0:x0,y0:y0,f:1/out};
 }
 
+/* 第1.42版: 映像が止まったら、カメラを止めて入れ直す (読み取りの状態はそのまま) */
+var frzSum=-1,frzAt=Date.now(),frzRestarting=false,busySince=0;
+function restartCam(){
+  frzRestarting=true;log("映像が止まったのでカメラを入れ直します");
+  try{if(timer){clearInterval(timer);timer=null;}if(stream){stream.getTracks().forEach(function(t){t.stop();});stream=null;}}catch(e){}
+  setTimeout(function(){
+    navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false})
+    .then(function(s){stream=s;video.srcObject=s;var pp=video.play();if(pp&&pp.catch)pp.catch(function(){});
+      frzAt=Date.now();frzSum=-1;busy=false;timer=setInterval(tick,200);frzRestarting=false;setStartBtn("run");log("カメラを入れ直しました");})
+    .catch(function(e){frzRestarting=false;setStartBtn("");setStatus("カメラを開始できません: "+e.name+" (「開始」を押してください)","ng");});
+  },300);
+}
+
 /* ---------- 毎フレーム ---------- */
 function tick(){
   /* 第1.39版: iPhone では確かめの画面 (confirm) などのあとで映像が止まったままになることがあるので、止まっていたら動かし直す */
   if(stream&&video.paused){try{var pp=video.play();if(pp&&pp.catch)pp.catch(function(){});}catch(e){}}
   drawGuide();renderScan();
+  if(busy&&Date.now()-busySince>8000){busy=false;log("読み取りの処理が止まっていたので、やり直します");}   /* 第1.42版: 処理が戻ってこないときの保険 */
   if(busy||!stream||video.readyState<2||!window.ZXingWASM)return;
   var vw=video.videoWidth,vh=video.videoHeight;if(!vw)return;
   full.width=vw;full.height=vh;fctx.drawImage(video,0,0,vw,vh);
+  /* 第1.42版: 映像が止まっていないかを見る。真ん中の 24×24 画素が 2 秒以上まったく同じなら、カメラを入れ直す */
+  try{var fp=fctx.getImageData(Math.floor(vw/2)-12,Math.floor(vh/2)-12,24,24).data,fs=0;for(var fi=0;fi<fp.length;fi+=4)fs=(fs*31+fp[fi]+fp[fi+1]*3+fp[fi+2]*7)%1000000007;
+    var fnow=Date.now();if(fs!==frzSum){frzSum=fs;frzAt=fnow;}else if(fnow-frzAt>2000&&!frzRestarting){restartCam();return;}}catch(e){}
   var sc=Math.min(1,1280/Math.max(vw,vh));small.width=Math.round(vw*sc);small.height=Math.round(vh*sc);
   sctx.drawImage(full,0,0,small.width,small.height);
-  busy=true;var t0=performance.now();
+  busy=true;busySince=Date.now();var t0=performance.now();
   ZXingWASM.readBarcodes(sctx.getImageData(0,0,small.width,small.height),{formats:["QRCode"],tryHarder:true,maxNumberOfSymbols:1})
   .then(function(res){
     /* 第1.37版: ラベル全体を枠に合わせると、カートンラベルの QR (49×49 セル) は縮めた映像では 1 セル 2 画素ほどで読めない。
