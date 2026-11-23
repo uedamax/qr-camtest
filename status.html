@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>パレット確認 状況</title>
 <!--
-  パレット確認 状況確認 第1.3版 (2026-11-23。1.1: スマホの幅に収める。1.2: 最初は未確認・一部だけ、50 番ごとの飛び先、先頭へ戻る。1.3: ログアウトして認証 QR で入り直せる)
+  パレット確認 状況確認 第1.4版 (2026-11-23。1.1: スマホの幅に収める。1.2: 最初は未確認・一部だけ、50 番ごとの飛び先、先頭へ戻る。1.3: ログアウトして認証 QR で入り直せる。1.4: 最初は便ごと・すべて、切り替えの帯を上に残す)
   通番ごと・便ごとに、確認が終わったか・だれが・いつを見る。通番を押すと詳細 (オーダーごと・記録の履歴・写真)。
   スマホはカードの一覧、PC (幅 900px 以上) は 1080p 向けの表と便の格子。
   確認の状態を変えられるのは管理者だけ (GAS 第2.11版の adminSet)。認証は pallet.html・easy.html と同じ認証 QR。
@@ -27,7 +27,7 @@ button.on{background:#ffd43b;color:#212529}
 #bar{height:14px;background:#495057;border-radius:7px;overflow:hidden;margin-top:6px}
 #bar div{height:100%;background:#2f9e44}
 #sum{font-size:14px;margin-top:4px}
-#tools{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:#dee2e6;position:sticky;top:0}
+#tools{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:#dee2e6;position:sticky;top:0;z-index:4}
 input,select,textarea{background:#ffa94d;color:#111;border:2px solid #fd7e14;border-radius:8px;font:inherit;font-weight:bold;padding:6px 8px}
 #q{width:9em}
 main{padding:8px 12px 40px}
@@ -75,7 +75,7 @@ td.sn{font-weight:bold;font-size:16px}
 </head>
 <body>
 <header>
-  <div class="hrow"><h1>パレット確認 状況</h1><span id="ver" class="tag">状況 1.3</span><span id="who" class="tag">未ログイン</span><span class="sp"></span><span id="upd"></span><button id="reload">更新</button><button id="logout" class="hidden" style="background:#c92a2a">ログアウト</button></div>
+  <div class="hrow"><h1>パレット確認 状況</h1><span id="ver" class="tag">状況 1.4</span><span id="who" class="tag">未ログイン</span><span class="sp"></span><span id="upd"></span><button id="reload">更新</button><button id="logout" class="hidden" style="background:#c92a2a">ログアウト</button></div>
   <div id="bar"><div style="width:0"></div></div>
   <div id="sum"></div>
 </header>
@@ -88,9 +88,9 @@ td.sn{font-weight:bold;font-size:16px}
 </div>
 <div id="app" class="hidden">
   <div id="tools">
-    <button id="tSerial" class="on">通番ごと</button><button id="tTrip">便ごと</button>
+    <button id="tSerial">通番ごと</button><button id="tTrip" class="on">便ごと</button>
     <span class="sp"></span>
-    <select id="flt"><option value="notdone" selected>未確認・一部</option><option value="">すべて</option><option value="none">未確認</option><option value="part">一部</option><option value="done">確認済み</option></select>
+    <select id="flt"><option value="" selected>すべて</option><option value="notdone">未確認・一部</option><option value="none">未確認</option><option value="part">一部</option><option value="done">確認済み</option></select>
     <input id="q" placeholder="通番・オーダー">
   </div>
   <div id="jump" style="position:sticky;top:0;z-index:3;background:#f1f3f5;display:flex;flex-wrap:wrap;gap:4px;padding:4px 0"></div>
@@ -106,7 +106,7 @@ var API="https://script.google.com/macros/s/AKfycbx5pITwYiVGCI6RGgZGdbF_imkfet5S
 var TOKEN_KEY="qr_lookup_token_v1";
 function $(i){return document.getElementById(i);}
 function esc(t){return String(t==null?"":t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
-var token=null,admin=false,DATA=null,VIEW="serial",SER={},TRIPS=[];
+var token=null,admin=false,DATA=null,VIEW="trip",SER={},TRIPS=[];
 function post(b){b.token=token;return fetch(API,{method:"POST",redirect:"follow",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify(b)}).then(function(r){if(!r.ok)throw new Error("HTTP "+r.status);return r.json();});}
 /* ---------- ログイン ---------- */
 function login(t){
@@ -177,12 +177,15 @@ function render(){
   /* 第1.2版: 50 番ごとの飛び先 (今の絞り込みで残る件数つき) */
   var jb="";if(VIEW==="serial"&&list.length>20){var mx=list[list.length-1].serial;for(var a=1;a<=mx;a+=50){var c=list.filter(function(o){return o.serial>=a&&o.serial<a+50;}).length;
     jb+='<button data-j="'+a+'" style="font-size:14px;padding:6px 8px'+(c?'':';opacity:.35')+'"'+(c?'':' disabled')+'>'+a+'〜 <small>('+c+')</small></button>';}}
-  $("jump").innerHTML=jb;$("jump").style.top=document.querySelector("header").offsetHeight+"px";$("jump").style.display=jb?"flex":"none";
+  $("jump").innerHTML=jb;stick();$("jump").style.display=jb?"flex":"none";
   [].forEach.call(document.querySelectorAll("[data-j]"),function(b){b.onclick=function(){var a=Number(b.dataset.j);
     var t=[].filter.call(document.querySelectorAll("#main [data-s]"),function(e){return e.offsetParent!==null&&Number(e.dataset.s)>=a;})[0];
-    if(t){var y=t.getBoundingClientRect().top+window.scrollY-$("jump").offsetHeight-document.querySelector("header").offsetHeight-8;window.scrollTo({top:y,behavior:"smooth"});}};});
+    if(t){var y=t.getBoundingClientRect().top+window.scrollY-$("jump").offsetHeight-$("tools").offsetHeight-document.querySelector("header").offsetHeight-8;window.scrollTo({top:y,behavior:"smooth"});}};});
   [].forEach.call(document.querySelectorAll("[data-s]"),function(e){e.onclick=function(){detail(e.dataset.s);};});
 }
+/* 第1.4版: 見出し・切り替えの帯・飛び先を、スクロールしても上に残す */
+function stick(){var hh=document.querySelector("header").offsetHeight;$("tools").style.top=hh+"px";$("jump").style.top=(hh+$("tools").offsetHeight)+"px";}
+window.addEventListener("resize",stick);
 $("toTop").onclick=function(){window.scrollTo({top:0,behavior:"smooth"});};
 $("tSerial").onclick=function(){VIEW="serial";this.classList.add("on");$("tTrip").classList.remove("on");render();};
 $("tTrip").onclick=function(){VIEW="trip";this.classList.add("on");$("tSerial").classList.remove("on");render();};
