@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.1版 (2026-11-23。第1.0版から ③ にオーム数を出す)
+  パレット確認 簡易版 第1.2版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (OK で次へ)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -71,7 +71,7 @@ button.warn{background:#fd7e14;color:#111}
   </div>
 </div>
 <div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.1版 / 2026-11-23 (③ にオーム数) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="foot">パレット確認 簡易版 第1.2版 / 2026-11-23 (ログインできたことを緑で出す) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -110,11 +110,11 @@ function tryToken(t){
   post({action:"whoami"}).then(function(j){
     if(!j.ok){token=null;try{localStorage.removeItem(TOKEN_KEY);}catch(e){}say("認証 QR が無効","ng","badtoken");return;}
     try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}
-    userName=j.name;$("who").textContent=j.name;$("out").classList.remove("hidden");loadLists();
+    userName=j.name;$("who").textContent=j.name;$("out").classList.remove("hidden");
+    say("✓ ログインしました: "+j.name,"ok");setTimeout(loadLists,1800);   /* 第1.2版: 認証 QR が読めたことをはっきり出す */
   }).catch(function(){token=null;say("通信エラー","ng","neterr");});
 }
 function loadLists(){
-  say("準備中","");
   post({action:"candidates",pn:""}).then(function(j){ORDERS=j.orders||[];return post({action:"sumiAll"});})
   .then(function(k){SUMI=k.rows||[];log("オーダー "+ORDERS.length+" / リスト "+SUMI.length);setStep(1);})
   .catch(function(){say("リストを読めません。開き直してください","ng","neterr");});
