@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.21版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す。1.11: 済んだらやることを消す。1.12: 判定に失敗したら読み直す・最初からやり直すボタン・版数を右上に。1.13: 読めた情報を出す。1.14: 認証 QR が読めたらすぐに名前を出す・失敗の理由を出す。1.15: 上にログインの状態を出す。1.16: 映像を低く・手順が変わったら点滅と振動。1.17: 自分の作業の履歴の画面。1.18: 読めた情報を 1 行で結果の下 (映像の上) に出す。1.19: 全員を一度ログアウト (ログインを覚える場所を変えた)。1.20: 管理者が全員を一斉にログアウトさせられる (GAS 第2.13版のログインの世代)。1.21: 終わったあと開始の画面に戻れる)
+  パレット確認 簡易版 第1.22版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す。1.11: 済んだらやることを消す。1.12: 判定に失敗したら読み直す・最初からやり直すボタン・版数を右上に。1.13: 読めた情報を出す。1.14: 認証 QR が読めたらすぐに名前を出す・失敗の理由を出す。1.15: 上にログインの状態を出す。1.16: 映像を低く・手順が変わったら点滅と振動。1.17: 自分の作業の履歴の画面。1.18: 読めた情報を 1 行で結果の下 (映像の上) に出す。1.19: 全員を一度ログアウト (ログインを覚える場所を変えた)。1.20: 管理者が全員を一斉にログアウトさせられる (GAS 第2.13版のログインの世代)。1.21: 終わったあと開始の画面に戻れる。1.22: どの手順からでも上の「開始に戻る」で戻れる)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (「次のカートンを読む」か「開始に戻る」)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -62,7 +62,7 @@ button.warn{background:#fd7e14;color:#111}
 </style>
 </head>
 <body>
-<div id="top"><span id="who" style="font-size:14px;font-weight:bold;color:#fff;background:#c92a2a;border-radius:8px;padding:2px 8px">未ログイン</span><span id="ver" style="background:#1c7ed6;color:#fff;border-radius:8px;padding:2px 8px;font-weight:bold">簡易版 1.21</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="hbtn" class="hidden" style="font-size:12px;padding:4px 6px;background:#1c7ed6">履歴</button><button id="vbtn" style="font-size:12px;padding:4px 6px">音声 OFF</button><button id="out" class="hidden" style="font-size:12px;padding:4px 6px">ログアウト</button></div>
+<div id="top"><span id="who" style="font-size:14px;font-weight:bold;color:#fff;background:#c92a2a;border-radius:8px;padding:2px 8px">未ログイン</span><span id="ver" style="background:#1c7ed6;color:#fff;border-radius:8px;padding:2px 8px;font-weight:bold">簡易版 1.22</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="home" class="hidden" style="font-size:12px;padding:4px 6px;background:#e67700">開始に戻る</button><button id="hbtn" class="hidden" style="font-size:12px;padding:4px 6px;background:#1c7ed6">履歴</button><button id="vbtn" style="font-size:12px;padding:4px 6px">音声 OFF</button><button id="out" class="hidden" style="font-size:12px;padding:4px 6px">ログアウト</button></div>
 <div id="steps"><span id="s1">①QR</span><span id="s2">②全体</span><span id="s3">③数</span><span id="s4">④パレット</span></div>
 <div id="todo"><small>やること</small>「開始」を押す</div>
 <p id="say"></p>
@@ -88,7 +88,7 @@ button.warn{background:#fd7e14;color:#111}
 <button id="redo" class="hidden" style="width:calc(100% - 24px);margin:8px 12px 0;background:#495057;font-size:18px;padding:10px">最初からやり直す (① へ)</button>
 <div id="hist" class="hidden" style="position:fixed;inset:0;background:#111;z-index:8;overflow:auto"><div style="position:sticky;top:0;background:#212529;padding:10px;display:flex;align-items:center;gap:10px"><button id="hBack" style="font-size:18px;padding:8px 12px">← 戻る</button><b id="hT" style="font-size:18px">自分の作業の履歴</b></div><div id="hB" style="padding:10px"></div></div>
 <div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button><button id="dlgNo" class="hidden" style="background:#868e96;margin-top:10px;width:100%;font-size:22px">もう一度確認する</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.21版 / 2026-11-23 (終わったあと開始の画面に戻れる) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="foot">パレット確認 簡易版 第1.22版 / 2026-11-23 (どの手順からでも開始に戻れる) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -126,7 +126,7 @@ function setStep(n){
   stepMsg();if(n===1)voice("qrnear");if(n===2){voice("pullback");s2At=Date.now();}
 }
 /* 第1.8版: 区切りごとに緑で伝えてから次へ (その間は読み取りを止める) */
-function flash(t,then){paused=true;clearTodo();say(t,"ok");var sy=$("say");sy.classList.remove("blink");void sy.offsetWidth;sy.classList.add("blink");try{if(navigator.vibrate)navigator.vibrate(80);}catch(e){}setTimeout(function(){paused=false;if(then)then();},1300);}   /* 結果は次の手順でも残す (上書きされるまで) */
+function flash(t,then){paused=true;clearTodo();say(t,"ok");var sy=$("say");sy.classList.remove("blink");void sy.offsetWidth;sy.classList.add("blink");try{if(navigator.vibrate)navigator.vibrate(80);}catch(e){}var my=cur;setTimeout(function(){paused=false;if(then&&cur===my)then();},1300);}   /* 第1.22版: その間に開始に戻ったら進まない */   /* 結果は次の手順でも残す (上書きされるまで) */
 function toast(t){var d=$("toast");d.textContent=t;d.classList.remove("hidden");clearTimeout(d._t);d._t=setTimeout(function(){d.classList.add("hidden");},3000);}
 function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
 function dialog(msg,next,okLabel,noLabel,noFn){clearTodo();$("dlgMsg").innerHTML=msg;$("dlg").classList.remove("hidden");paused=true;
@@ -227,7 +227,7 @@ var LABEL={u0:-6.2,v0:-0.5,u1:1.65,v1:4.4},PLABEL={u0:-4.875,v0:-2.542,u1:1.3125
 var BOX={num:{u0:-0.1,v0:2.4,u1:1.45,v1:3.6},ord:{u0:-0.9,v0:3.3,u1:0.5,v1:4.15}},PX=110,NEED=3;
 function startCam(){
   return navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:"environment"},width:{ideal:1920},height:{ideal:1080}},audio:false})
-  .then(function(s){stream=s;video.srcObject=s;var p=video.play();if(p&&p.catch)p.catch(function(){});frzAt=Date.now();frzSum=-1;if(!timer)timer=setInterval(tick,200);});
+  .then(function(s){stream=s;video.srcObject=s;$("home").classList.remove("hidden");var p=video.play();if(p&&p.catch)p.catch(function(){});frzAt=Date.now();frzSum=-1;if(!timer)timer=setInterval(tick,200);});
 }
 $("startBtn").onclick=function(){
   this.classList.add("hidden");
@@ -343,8 +343,10 @@ function onLabel(txt){
 }
 /* 第1.21版: 次へ進まずに開始の画面に戻る (カメラを止め、開始ボタンを出す。ログインはそのまま) */
 function nextCarton(){reset();$("cSerial").value="";setStep(1);}
-function backToStart(){reset();$("cSerial").value="";paused=false;try{stream.getTracks().forEach(function(t){t.stop();});}catch(e){}stream=null;video.srcObject=null;
+function backToStart(){$("home").classList.add("hidden");$("dlg").classList.add("hidden");$("hist").classList.add("hidden");$("manual").classList.add("hidden");if(hintT){clearTimeout(hintT);hintT=null;}reset();$("cSerial").value="";paused=false;try{stream.getTracks().forEach(function(t){t.stop();});}catch(e){}stream=null;video.srcObject=null;
   setStep(0);$("startBtn").classList.remove("hidden");$("todo").className="";$("todo").innerHTML="<small>やること</small>続けるときは「開始」";say("開始の画面に戻りました","ok");}
+/* 第1.22版: 上の「開始に戻る」。読みかけ (②〜④) のときだけ確かめる。ほかのダイアログが出ているときはそのまま戻る */
+$("home").onclick=function(){if($("dlg").classList.contains("hidden")&&STEP>=2&&STEP<=4)dialog("読みかけのカートンは記録されません。<br>開始に戻りますか？",backToStart,"開始に戻る","続ける",function(){});else backToStart();};
 function finish(sn,note){
   var o=cur.order;var photos=cur.photos.map(function(p){p.order=o.order;return p;});
   bgSave({serial:String(Number(sn)),order:o.order,from:+$("cFrom").value,to:+$("cTo").value,scanned:cur.fixed.num||"",scanSrc:cur.manual?"手入力":"OCR",confirmed:true,force:!!cur.force,qrId:cur.pq?cur.pq.id:"",note:"簡易版"+(note?" "+note:"")},photos);
