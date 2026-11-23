@@ -5,14 +5,14 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>パレット確認 状況</title>
 <!--
-  パレット確認 状況確認 第1.1版 (2026-11-23。1.1: スマホの幅に収める)
+  パレット確認 状況確認 第1.2版 (2026-11-23。1.1: スマホの幅に収める。1.2: 最初は未確認・一部だけ、50 番ごとの飛び先、先頭へ戻る)
   通番ごと・便ごとに、確認が終わったか・だれが・いつを見る。通番を押すと詳細 (オーダーごと・記録の履歴・写真)。
   スマホはカードの一覧、PC (幅 900px 以上) は 1080p 向けの表と便の格子。
   確認の状態を変えられるのは管理者だけ (GAS 第2.11版の adminSet)。認証は pallet.html・easy.html と同じ認証 QR。
 -->
 <style>
 *{box-sizing:border-box}
-html,body{overflow-x:hidden}
+html,body{overflow-x:clip}  /* hidden だと上に留める (sticky) が効かない */
 body{margin:0;font-family:system-ui,-apple-system,"Hiragino Sans","BIZ UDPGothic",sans-serif;background:#f1f3f5;color:#212529}
 header{position:sticky;top:0;z-index:5;background:#212529;color:#fff;padding:8px 12px}
 .hrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -75,7 +75,7 @@ td.sn{font-weight:bold;font-size:16px}
 </head>
 <body>
 <header>
-  <div class="hrow"><h1>パレット確認 状況</h1><span id="ver" class="tag">状況 1.1</span><span id="who" class="tag">未ログイン</span><span class="sp"></span><span id="upd"></span><button id="reload">更新</button></div>
+  <div class="hrow"><h1>パレット確認 状況</h1><span id="ver" class="tag">状況 1.2</span><span id="who" class="tag">未ログイン</span><span class="sp"></span><span id="upd"></span><button id="reload">更新</button></div>
   <div id="bar"><div style="width:0"></div></div>
   <div id="sum"></div>
 </header>
@@ -90,10 +90,12 @@ td.sn{font-weight:bold;font-size:16px}
   <div id="tools">
     <button id="tSerial" class="on">通番ごと</button><button id="tTrip">便ごと</button>
     <span class="sp"></span>
-    <select id="flt"><option value="">すべて</option><option value="none">未確認</option><option value="part">一部</option><option value="done">確認済み</option></select>
+    <select id="flt"><option value="notdone" selected>未確認・一部</option><option value="">すべて</option><option value="none">未確認</option><option value="part">一部</option><option value="done">確認済み</option></select>
     <input id="q" placeholder="通番・オーダー">
   </div>
+  <div id="jump" style="position:sticky;top:0;z-index:3;background:#f1f3f5;display:flex;flex-wrap:wrap;gap:4px;padding:4px 0"></div>
   <main id="main"></main>
+  <button id="toTop" style="position:fixed;right:12px;bottom:12px;z-index:4;font-size:16px;padding:10px 14px;border-radius:24px;box-shadow:0 2px 6px #0006">↑ 先頭</button>
 </div>
 <div id="det" class="hidden"><div class="top"><button id="back">← 一覧へ</button><b id="detT" style="font-size:20px"></b></div><div class="body" id="detB"></div></div>
 <div id="dlg" class="hidden"><div class="b"><div id="dlgM" style="font-weight:bold;font-size:18px;margin-bottom:8px"></div><input id="dlgR" placeholder="理由 (任意)" style="width:100%"><div style="display:flex;gap:8px;margin-top:10px"><button id="dlgNo" style="flex:1">やめる</button><button id="dlgOk" style="flex:1;background:#1c7ed6">はい</button></div></div></div>
@@ -154,7 +156,7 @@ function build(){
 }
 var ST={done:"確認済み",part:"一部",none:"未確認"};
 function pass(o){var f=$("flt").value,q=$("q").value.trim().toUpperCase();
-  if(f&&o.st!==f)return false;
+  if(f==="notdone"){if(o.st==="done")return false;}else if(f&&o.st!==f)return false;
   if(q&&String(o.serial).indexOf(q.replace(/^0+/,""))!==0&&!o.orders.some(function(x){return x.order.toUpperCase().indexOf(q)>=0;}))return false;return true;}
 function when(r){return r?r.at.slice(5,16).replace("-","/"):"";}
 function render(){
@@ -170,8 +172,16 @@ function render(){
         ls.map(function(o){return '<span class="sbtn '+o.st+'" data-s="'+o.serial+'">'+o.serial+'</span>';}).join("")+'</div>';}).join("")+'</div>';
   }
   $("main").innerHTML=h||"該当なし";
+  /* 第1.2版: 50 番ごとの飛び先 (今の絞り込みで残る件数つき) */
+  var jb="";if(VIEW==="serial"&&list.length>20){var mx=list[list.length-1].serial;for(var a=1;a<=mx;a+=50){var c=list.filter(function(o){return o.serial>=a&&o.serial<a+50;}).length;
+    jb+='<button data-j="'+a+'" style="font-size:14px;padding:6px 8px'+(c?'':';opacity:.35')+'"'+(c?'':' disabled')+'>'+a+'〜 <small>('+c+')</small></button>';}}
+  $("jump").innerHTML=jb;$("jump").style.top=document.querySelector("header").offsetHeight+"px";$("jump").style.display=jb?"flex":"none";
+  [].forEach.call(document.querySelectorAll("[data-j]"),function(b){b.onclick=function(){var a=Number(b.dataset.j);
+    var t=[].filter.call(document.querySelectorAll("#main [data-s]"),function(e){return e.offsetParent!==null&&Number(e.dataset.s)>=a;})[0];
+    if(t){var y=t.getBoundingClientRect().top+window.scrollY-$("jump").offsetHeight-document.querySelector("header").offsetHeight-8;window.scrollTo({top:y,behavior:"smooth"});}};});
   [].forEach.call(document.querySelectorAll("[data-s]"),function(e){e.onclick=function(){detail(e.dataset.s);};});
 }
+$("toTop").onclick=function(){window.scrollTo({top:0,behavior:"smooth"});};
 $("tSerial").onclick=function(){VIEW="serial";this.classList.add("on");$("tTrip").classList.remove("on");render();};
 $("tTrip").onclick=function(){VIEW="trip";this.classList.add("on");$("tSerial").classList.remove("on");render();};
 $("flt").onchange=render;$("q").oninput=render;
