@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.2版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す)
+  パレット確認 簡易版 第1.2版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (OK で次へ)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -71,7 +71,7 @@ button.warn{background:#fd7e14;color:#111}
   </div>
 </div>
 <div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.4版 / 2026-11-23 (緑の枠のまわりだけで QR を探す) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="foot">パレット確認 簡易版 第1.5版 / 2026-11-23 (① でパレットラベルの QR を受け付けない) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -296,7 +296,8 @@ function tick(){
     if(cx<bx||cx>bx+bz||cy<by||cy>by+bz){say("QR を緑の枠の中に","ng");return;}
     if(/^US-[0-9A-F]{32}$/.test(txt)){if(txt!==token)tryToken(txt);return;}
     if(STEP===0){say("先に認証 QR を撮る","ng");return;}
-    if(STEP===1){var pq=parseQR(txt);if(!pq){say("カートンラベルの QR ではない","ng");return;}
+    if(STEP===1&&/^MVPH?,\d{2},/.test(txt)){say("これはパレットラベル。カートンの QR を","ng");return;}   /* 第1.5版: 前のパレットラベルを拾って進まない */
+    if(STEP===1){var pq=parseQR(txt);if(!pq||!/^\d{6,}[A-Z]?$/.test(pq.pn)){say("カートンラベルの QR ではない","ng");return;}
       cur.qr=txt;cur.pq=pq;snap("carton");log("QR "+pq.pn);setStep(2);return;}
     if(STEP===4&&/^MVPH?,\d{2},/.test(txt))onLabel(txt);
   }).catch(function(){busy=false;});
