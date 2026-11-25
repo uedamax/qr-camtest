@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <title>パレット確認 簡易版</title>
 <!--
-  パレット確認 簡易版 第1.22版 (2026-11-23。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す。1.11: 済んだらやることを消す。1.12: 判定に失敗したら読み直す・最初からやり直すボタン・版数を右上に。1.13: 読めた情報を出す。1.14: 認証 QR が読めたらすぐに名前を出す・失敗の理由を出す。1.15: 上にログインの状態を出す。1.16: 映像を低く・手順が変わったら点滅と振動。1.17: 自分の作業の履歴の画面。1.18: 読めた情報を 1 行で結果の下 (映像の上) に出す。1.19: 全員を一度ログアウト (ログインを覚える場所を変えた)。1.20: 管理者が全員を一斉にログアウトさせられる (GAS 第2.13版のログインの世代)。1.21: 終わったあと開始の画面に戻れる。1.22: どの手順からでも上の「開始に戻る」で戻れる)
+  パレット確認 簡易版 第1.23版 (2026-11-26。1.1: ③ にオーム数。1.2: ログインできたことを緑で出す。1.3: ④ はパレットの QR を緑の枠に、音声は OFF が既定。1.4: 緑の枠のまわりだけで QR を探す。1.5: ① でパレットラベルの QR を受け付けない。1.6: 対象の種類の QR だけを受け付ける。1.7: 違う QR のときは読むべき QR を指示。1.8: ログインした人の名前を大きく出しカートンの QR を勧める。手順の区切りごとに緑で伝える。1.9: 確認済みのカートンは誰が確認したかを出し、キャンセルできる。開始ボタンを映像の真ん中に。1.10: やること (上) と結果 (下) を分けて出す。1.11: 済んだらやることを消す。1.12: 判定に失敗したら読み直す・最初からやり直すボタン・版数を右上に。1.13: 読めた情報を出す。1.14: 認証 QR が読めたらすぐに名前を出す・失敗の理由を出す。1.15: 上にログインの状態を出す。1.16: 映像を低く・手順が変わったら点滅と振動。1.17: 自分の作業の履歴の画面。1.18: 読めた情報を 1 行で結果の下 (映像の上) に出す。1.19: 全員を一度ログアウト (ログインを覚える場所を変えた)。1.20: 管理者が全員を一斉にログアウトさせられる (GAS 第2.13版のログインの世代)。1.21: 終わったあと開始の画面に戻れる。1.22: どの手順からでも上の「開始に戻る」で戻れる。1.23: リストに無いパレット (先行入庫分) をリスト外として記録できる)
   1 本道の手順: ① カートンの QR を近づけて読む → ② 離してラベル全体 (文字を読む) → ③ 箱の数を確かめる
   → ④ パレットラベルを読む → 終わりました (OK) → 次のカートンを読みますか (「次のカートンを読む」か「開始に戻る」)
   サーバ (Apps Script) と認証 QR は pallet.html と同じ。記録は裏で送り、待たせない。
@@ -62,7 +62,7 @@ button.warn{background:#fd7e14;color:#111}
 </style>
 </head>
 <body>
-<div id="top"><span id="who" style="font-size:14px;font-weight:bold;color:#fff;background:#c92a2a;border-radius:8px;padding:2px 8px">未ログイン</span><span id="ver" style="background:#1c7ed6;color:#fff;border-radius:8px;padding:2px 8px;font-weight:bold">簡易版 1.22</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="home" class="hidden" style="font-size:12px;padding:4px 6px;background:#e67700">開始に戻る</button><button id="hbtn" class="hidden" style="font-size:12px;padding:4px 6px;background:#1c7ed6">履歴</button><button id="vbtn" style="font-size:12px;padding:4px 6px">音声 OFF</button><button id="out" class="hidden" style="font-size:12px;padding:4px 6px">ログアウト</button></div>
+<div id="top"><span id="who" style="font-size:14px;font-weight:bold;color:#fff;background:#c92a2a;border-radius:8px;padding:2px 8px">未ログイン</span><span id="ver" style="background:#1c7ed6;color:#fff;border-radius:8px;padding:2px 8px;font-weight:bold">簡易版 1.23</span><span class="sp"></span><span id="badge" class="hidden"></span><button id="home" class="hidden" style="font-size:12px;padding:4px 6px;background:#e67700">開始に戻る</button><button id="hbtn" class="hidden" style="font-size:12px;padding:4px 6px;background:#1c7ed6">履歴</button><button id="vbtn" style="font-size:12px;padding:4px 6px">音声 OFF</button><button id="out" class="hidden" style="font-size:12px;padding:4px 6px">ログアウト</button></div>
 <div id="steps"><span id="s1">①QR</span><span id="s2">②全体</span><span id="s3">③数</span><span id="s4">④パレット</span></div>
 <div id="todo"><small>やること</small>「開始」を押す</div>
 <p id="say"></p>
@@ -73,6 +73,7 @@ button.warn{background:#fd7e14;color:#111}
   <div id="manual" class="hidden">
     <div class="row"><span class="mid">箱番号</span><input id="mNum" inputmode="numeric" maxlength="2"><span class="mid">オーダー下4桁</span><input id="mOrd" inputmode="numeric" maxlength="4"></div>
     <button id="mOk" class="warn" style="width:100%">この番号で進む</button>
+    <button id="lout" class="hidden" style="width:100%;margin-top:8px;background:#7048e8">リスト外として記録 (先行入庫など)</button>
   </div>
   <!-- ③ 箱の数を確かめる -->
   <div id="count" class="hidden">
@@ -88,7 +89,7 @@ button.warn{background:#fd7e14;color:#111}
 <button id="redo" class="hidden" style="width:calc(100% - 24px);margin:8px 12px 0;background:#495057;font-size:18px;padding:10px">最初からやり直す (① へ)</button>
 <div id="hist" class="hidden" style="position:fixed;inset:0;background:#111;z-index:8;overflow:auto"><div style="position:sticky;top:0;background:#212529;padding:10px;display:flex;align-items:center;gap:10px"><button id="hBack" style="font-size:18px;padding:8px 12px">← 戻る</button><b id="hT" style="font-size:18px">自分の作業の履歴</b></div><div id="hB" style="padding:10px"></div></div>
 <div id="dlg" class="hidden"><div class="box"><div id="dlgMsg" class="msg"></div><button id="dlgOk">OK</button><button id="dlgNo" class="hidden" style="background:#868e96;margin-top:10px;width:100%;font-size:22px">もう一度確認する</button></div></div>
-<div id="foot">パレット確認 簡易版 第1.22版 / 2026-11-23 (どの手順からでも開始に戻れる) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
+<div id="foot">パレット確認 簡易版 第1.23版 / 2026-11-26 (リスト外として記録できる) / 音声: VOICEVOX:青山龍星<div id="log"></div></div>
 
 <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.6/dist/iife/reader/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
@@ -298,7 +299,7 @@ function ocrOne(k,c){
 }
 /* ---------- 1 件分の状態 ---------- */
 var cur,s2At=0;
-function reset(){setTimeout(showInfo,0);cur={qr:null,pq:null,votes:{num:{},ord:{}},fixed:{num:null,ord:null},order:null,row:null,photos:[]};}
+function reset(){var lb=$("lout");if(lb)lb.classList.add("hidden");setTimeout(showInfo,0);cur={qr:null,pq:null,votes:{num:{},ord:{}},fixed:{num:null,ord:null},order:null,row:null,photos:[]};}
 reset();
 function parseQR(t){t=String(t).trim().replace(/'+$/,"");var f=t.split(",");if(f.length<6)return null;return {id:f[0],pn:f[3],name:f[4]};}
 function snap(kind){try{var s=Math.min(1,800/Math.max(full.width,full.height)),c=document.createElement("canvas");c.width=Math.round(full.width*s);c.height=Math.round(full.height*s);
@@ -307,9 +308,9 @@ function snap(kind){try{var s=Math.min(1,800/Math.max(full.width,full.height)),c
 function decide(num,ord){
   var list=(ORDERS||[]).filter(function(o){return o.pn===cur.pq.pn;});
   var o=list.filter(function(x){return x.last4===ord;})[0]||(list.length===1?list[0]:null);
-  if(!o){say("リストに無いオーダー ("+ord+")。読み直すか、手で入れる","ng");$("manual").classList.remove("hidden");rereadOcr();return;}
+  if(!o){cur.fail={num:num,ord:ord,o:null};$("lout").classList.remove("hidden");say("リストに無いオーダー ("+ord+")。読み直すか、手で入れるか、リスト外として記録","ng");$("manual").classList.remove("hidden");rereadOcr();return;}
   var n=+num,rows=SUMI.filter(function(r){return r.order===o.order;}),hit=rows.filter(function(r){return r.from&&r.to&&n>=r.from&&n<=r.to;})[0];
-  if(!hit){say("箱 "+num+" の通番がリストに無い。読み直すか、手で入れる","ng");$("manual").classList.remove("hidden");rereadOcr();return;}
+  if(!hit){cur.fail={num:num,ord:ord,o:o};$("lout").classList.remove("hidden");say("箱 "+num+" の通番がリストに無い。読み直すか、手で入れるか、リスト外として記録","ng");$("manual").classList.remove("hidden");rereadOcr();return;}
   cur.order=o;cur.row=hit;
   $("cSerial").value=hit.serial;$("cOrder").textContent=o.order;$("cOhm").textContent=(cur.pq&&cur.pq.name)||o.item||"";   /* 第1.1版: オーム数も出す */$("cFrom").value=hit.from;$("cTo").value=hit.to;showN();
   checkDone(hit.serial,o.order);
@@ -319,7 +320,7 @@ function decide(num,ord){
 function best(k){var vs=cur.votes[k],b=null,n=0;for(var x in vs)if(vs[x]>n){n=vs[x];b=x;}return b;}
 function showInfo(){   /* 第1.18版: 読めた情報を 1 行にまとめ、結果の欄のすぐ下 (映像の上) に出す。読み途中は灰色 */
   var h=[];function g(t){return '<span class="t">'+t+'</span>';}
-  if(cur.order&&cur.row){h.push("通番 <b>"+esc(String(Number(cur.row.serial)))+"</b>");h.push(esc(cur.order.order));}
+  if(cur.order&&cur.row){h.push(cur.out&&!cur.row.serial?"<b>リスト外</b>":"通番 <b>"+esc(String(Number(cur.row.serial)))+"</b>"+(cur.out?" (リスト外)":""));h.push(esc(cur.order.order));}
   else if(cur.pq&&STEP>=2){var bn=cur.fixed.num||best("num"),bo=cur.fixed.ord||best("ord");
     h.push("箱 "+(cur.fixed.num?"<b>"+esc(cur.fixed.num)+"</b>":g(bn?esc(bn)+"?":"-")));
     h.push("下4桁 "+(cur.fixed.ord?"<b>"+esc(cur.fixed.ord)+"</b>":g(bo?esc(bo)+"?":"-")));}
@@ -331,6 +332,11 @@ function showInfo(){   /* 第1.18版: 読めた情報を 1 行にまとめ、結
 /* 第1.12版: 判定に失敗したら、文字の読み取りをやり直す (同じ結果で止まらない) */
 function rereadOcr(){cur.fixed={num:null,ord:null};cur.votes={num:{},ord:{}};cur.manual=false;}
 $("redo").onclick=function(){reset();$("cSerial").value="";$("manual").classList.add("hidden");say("最初からやり直します","");setStep(1);};
+/* 第1.23版: リスト外 (先行入庫など)。通番は ④ のパレットラベルから取る。オーダーが分からなければ「リスト外-下4桁」 */
+$("lout").onclick=function(){var f=cur.fail;if(!f)return;var o=f.o||{order:"リスト外-"+f.ord,item:(cur.pq&&cur.pq.name)||""};
+  cur.out=true;cur.order=o;cur.row={serial:"",order:o.order,from:+f.num,to:+f.num};cur.fixed.num=f.num;cur.fixed.ord=f.ord;$("lout").classList.add("hidden");
+  $("cSerial").value="";$("cSerial").placeholder="ラベル";$("cOrder").textContent=o.order+" (リスト外)";$("cOhm").textContent=(cur.pq&&cur.pq.name)||o.item||"";$("cFrom").value=f.num;$("cTo").value=f.num;showN();
+  flash("リスト外として記録します。カートン番号の範囲を入れる",function(){setStep(3);});};
 function showN(){var f=+$("cFrom").value,t=+$("cTo").value;$("cN").textContent=(f&&t&&t>=f)?(t-f+1)+" 箱":"";}
 ["cFrom","cTo"].forEach(function(id){$(id).addEventListener("input",showN);});
 $("cOk").onclick=function(){var f=+$("cFrom").value,t=+$("cTo").value;if(!(f>=1&&t>=f)){say("範囲を入れる","ng");return;}flash("✓ 箱の数を確かめました",function(){setStep(4);});};
@@ -338,6 +344,7 @@ $("mOk").onclick=function(){var n=$("mNum").value.replace(/\D/g,""),o=$("mOrd").
 /* パレットラベルを読んだ */
 function onLabel(txt){
   var sn=String(Number($("cSerial").value||0)),m=/^MVP,0[12],(\d{1,4}),/.exec(txt+",");
+  if(cur.out){if(m){sn=String(Number(m[1]));$("cSerial").value=sn;}if(sn!=="0")cur.row.serial=sn;else if(sn==="0"){say("手書きのラベルは、③ の通番の欄に通番を入れてから読む","ng");return;}}   /* 第1.23版 */
   if(m&&String(Number(m[1]))!==sn){say("ラベルの通番 "+Number(m[1])+" ≠ "+sn,"ng","labelng");return;}
   cur.label=m?String(Number(m[1])):"手書き";showInfo();snap("label");flash("✓ パレットラベルを読みました",function(){finish(sn,m?"":"手書きラベル");});
 }
@@ -349,7 +356,7 @@ function backToStart(){$("home").classList.add("hidden");$("dlg").classList.add(
 $("home").onclick=function(){if($("dlg").classList.contains("hidden")&&STEP>=2&&STEP<=4)dialog("読みかけのカートンは記録されません。<br>開始に戻りますか？",backToStart,"開始に戻る","続ける",function(){});else backToStart();};
 function finish(sn,note){
   var o=cur.order;var photos=cur.photos.map(function(p){p.order=o.order;return p;});
-  bgSave({serial:String(Number(sn)),order:o.order,from:+$("cFrom").value,to:+$("cTo").value,scanned:cur.fixed.num||"",scanSrc:cur.manual?"手入力":"OCR",confirmed:true,force:!!cur.force,qrId:cur.pq?cur.pq.id:"",note:"簡易版"+(note?" "+note:"")},photos);
+  bgSave({serial:String(Number(sn)),order:o.order,from:+$("cFrom").value,to:+$("cTo").value,scanned:cur.fixed.num||"",scanSrc:cur.manual?"手入力":"OCR",confirmed:true,force:!!cur.force,qrId:cur.pq?cur.pq.id:"",note:"簡易版"+(cur.out?" リスト外 品番 "+(cur.pq?cur.pq.pn:"")+" "+(cur.pq?cur.pq.name:"")+" 箱 "+(cur.fixed.num||"")+" 下4桁 "+(cur.fixed.ord||""):"")+(note?" "+note:"")},photos);
   setStep(5);say("終わりました","ok","finished");
   var rest=SUMI.filter(function(r){return r.serial===String(Number(sn))&&r.order!==o.order;}).length;
   dialog("通番 "+sn+" の確認が<br>終わりました"+(rest?"<br><small>このパレットには、ほかに "+rest+" オーダーあります</small>":""),function(){
