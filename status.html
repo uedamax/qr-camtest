@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>パレット確認 状況</title>
 <!--
-  パレット確認 状況確認 第1.9版 (2026-11-26。1.1: スマホの幅に収める。1.2: 最初は未確認・一部だけ、50 番ごとの飛び先、先頭へ戻る。1.3: ログアウトして認証 QR で入り直せる。1.4: 最初は便ごと・すべて、切り替えの帯を上に残す。1.5: 終わりの見込み (管理者だけ。休憩は GAS 第2.12版の breaks)。1.6: 試験の記録を消す (テスト利用者1 だけ)。1.7: 全員を一度ログアウト (ログインを覚える場所を変えた)。1.8: 全員をログアウト (管理者だけ。GAS 第2.13版のログインの世代)。1.9: リスト外 (先行入庫など) の記録を 1 台として数え、終わりの見込みに先行入庫の見込み台数を足す)
+  パレット確認 状況確認 第1.10版 (2026-11-27。1.1: スマホの幅に収める。1.2: 最初は未確認・一部だけ、50 番ごとの飛び先、先頭へ戻る。1.3: ログアウトして認証 QR で入り直せる。1.4: 最初は便ごと・すべて、切り替えの帯を上に残す。1.5: 終わりの見込み (管理者だけ。休憩は GAS 第2.12版の breaks)。1.6: 試験の記録を消す (テスト利用者1 だけ)。1.7: 全員を一度ログアウト (ログインを覚える場所を変えた)。1.8: 全員をログアウト (管理者だけ。GAS 第2.13版のログインの世代)。1.9: リスト外 (先行入庫など) の記録を 1 台として数え、終わりの見込みに先行入庫の見込み台数を足す。1.10: 先行入庫の 40 台 (通番 401〜440) を住友パレットの表に足したので、見込み台数の上乗せをやめた)
   通番ごと・便ごとに、確認が終わったか・だれが・いつを見る。通番を押すと詳細 (オーダーごと・記録の履歴・写真)。
   スマホはカードの一覧、PC (幅 900px 以上) は 1080p 向けの表と便の格子。
   確認の状態を変えられるのは管理者だけ (GAS 第2.11版の adminSet)。認証は pallet.html・easy.html と同じ認証 QR。
@@ -78,7 +78,7 @@ td.sn{font-weight:bold;font-size:16px}
 </head>
 <body>
 <header>
-  <div class="hrow"><h1>パレット確認 状況</h1><span id="ver" class="tag">状況 1.9</span><span id="who" class="tag">未ログイン</span><span class="sp"></span><span id="upd"></span><button id="reload">更新</button><button id="logout" class="hidden" style="background:#c92a2a">ログアウト</button><button id="outAll" class="hidden" style="background:#fff;color:#495057;border:2px solid #495057">全員をログアウト</button><button id="resetT" class="hidden" style="background:#fff;color:#c92a2a;border:2px solid #c92a2a">試験の記録を消す</button></div>
+  <div class="hrow"><h1>パレット確認 状況</h1><span id="ver" class="tag">状況 1.10</span><span id="who" class="tag">未ログイン</span><span class="sp"></span><span id="upd"></span><button id="reload">更新</button><button id="logout" class="hidden" style="background:#c92a2a">ログアウト</button><button id="outAll" class="hidden" style="background:#fff;color:#495057;border:2px solid #495057">全員をログアウト</button><button id="resetT" class="hidden" style="background:#fff;color:#c92a2a;border:2px solid #c92a2a">試験の記録を消す</button></div>
   <div id="bar"><div style="width:0"></div></div>
   <div id="sum"></div>
 </header>
@@ -230,7 +230,7 @@ function hm2m(t){var m=/^(\d{1,2}):(\d{2})/.exec(t||"");return m?(+m[1])*60+(+m[
 function m2hm(m){m=Math.round(m);var d=Math.floor(m/1440);m-=d*1440;return (d?"翌日 ":"")+Math.floor(m/60)+":"+("0"+m%60).slice(-2);}
 function dur(m){m=Math.max(0,Math.round(m));return (m>=60?Math.floor(m/60)+" 時間 ":"")+(m%60)+" 分";}
 function brkIn(a,b){return BREAKS.reduce(function(t,x){var s=hm2m(x.s),e=hm2m(x.e);return t+Math.max(0,Math.min(b,e)-Math.max(a,s));},0);}
-var OUT_EXPECT=40;   /* 第1.9版: 先行入庫 (リスト外) の見込み台数。11/25 のメールで 40 パレット */
+var OUT_EXPECT=0;   /* 第1.10版: 先行入庫の 40 台は住友パレットの表に入ったので 0 (第1.9版は 40) */
 function etaCalc(){
   var nowD=new Date(),today=nowD.getFullYear()+"-"+("0"+(nowD.getMonth()+1)).slice(-2)+"-"+("0"+nowD.getDate()).slice(-2),nm=nowD.getHours()*60+nowD.getMinutes()+nowD.getSeconds()/60;
   var recs=DATA.records.filter(function(r){return r.at.slice(0,10)===today&&r.kind!=="取消";});
